@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 
 const fmt  = v => (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
@@ -744,28 +744,25 @@ export default function App(){
   const [jogos,setJogos]       = useState(ALL_JOGOS);
   const [servicos,setServicos] = useState(SERVICOS_INIT);
   const [darkMode,setDarkMode] = useState(true);
-  const [storageReady, setStorageReady] = useState(false);
 
   // Carregar dados salvos ao iniciar
-  useState(()=>{
+  useEffect(()=>{
     (async()=>{
       try {
-        const sJogos = await window.storage.get("bra2026:jogos");
-        if(sJogos) setJogos(JSON.parse(sJogos.value));
+        const s = await window.storage.get("bra2026:jogos");
+        if(s?.value) setJogos(JSON.parse(s.value));
       } catch(_){}
       try {
-        const sServicos = await window.storage.get("bra2026:servicos");
-        if(sServicos) setServicos(JSON.parse(sServicos.value));
+        const s = await window.storage.get("bra2026:servicos");
+        if(s?.value) setServicos(JSON.parse(s.value));
       } catch(_){}
       try {
-        const sDark = await window.storage.get("bra2026:darkMode");
-        if(sDark) setDarkMode(JSON.parse(sDark.value));
+        const s = await window.storage.get("bra2026:darkMode");
+        if(s?.value) setDarkMode(JSON.parse(s.value));
       } catch(_){}
-      setStorageReady(true);
     })();
-  });
+  },[]);
 
-  // Persistir jogos sempre que mudar
   const setJogosP = (fn) => {
     setJogos(prev => {
       const next = typeof fn === "function" ? fn(prev) : fn;
@@ -774,7 +771,6 @@ export default function App(){
     });
   };
 
-  // Persistir serviços sempre que mudar
   const setServicosP = (fn) => {
     setServicos(prev => {
       const next = typeof fn === "function" ? fn(prev) : fn;
@@ -783,13 +779,10 @@ export default function App(){
     });
   };
 
-  // Persistir dark mode
-  const setDarkModeP = (fn) => {
-    setDarkMode(prev => {
-      const next = typeof fn === "function" ? fn(prev) : fn;
-      window.storage.set("bra2026:darkMode", JSON.stringify(next)).catch(()=>{});
-      return next;
-    });
+  const setDarkModeP = (v) => {
+    const next = typeof v === "function" ? v(darkMode) : v;
+    setDarkMode(next);
+    window.storage.set("bra2026:darkMode", JSON.stringify(next)).catch(()=>{});
   };
 
   const T = darkMode ? DARK : LIGHT;
