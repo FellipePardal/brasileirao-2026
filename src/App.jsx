@@ -744,6 +744,53 @@ export default function App(){
   const [jogos,setJogos]       = useState(ALL_JOGOS);
   const [servicos,setServicos] = useState(SERVICOS_INIT);
   const [darkMode,setDarkMode] = useState(true);
+  const [storageReady, setStorageReady] = useState(false);
+
+  // Carregar dados salvos ao iniciar
+  useState(()=>{
+    (async()=>{
+      try {
+        const sJogos = await window.storage.get("bra2026:jogos");
+        if(sJogos) setJogos(JSON.parse(sJogos.value));
+      } catch(_){}
+      try {
+        const sServicos = await window.storage.get("bra2026:servicos");
+        if(sServicos) setServicos(JSON.parse(sServicos.value));
+      } catch(_){}
+      try {
+        const sDark = await window.storage.get("bra2026:darkMode");
+        if(sDark) setDarkMode(JSON.parse(sDark.value));
+      } catch(_){}
+      setStorageReady(true);
+    })();
+  });
+
+  // Persistir jogos sempre que mudar
+  const setJogosP = (fn) => {
+    setJogos(prev => {
+      const next = typeof fn === "function" ? fn(prev) : fn;
+      window.storage.set("bra2026:jogos", JSON.stringify(next)).catch(()=>{});
+      return next;
+    });
+  };
+
+  // Persistir serviços sempre que mudar
+  const setServicosP = (fn) => {
+    setServicos(prev => {
+      const next = typeof fn === "function" ? fn(prev) : fn;
+      window.storage.set("bra2026:servicos", JSON.stringify(next)).catch(()=>{});
+      return next;
+    });
+  };
+
+  // Persistir dark mode
+  const setDarkModeP = (fn) => {
+    setDarkMode(prev => {
+      const next = typeof fn === "function" ? fn(prev) : fn;
+      window.storage.set("bra2026:darkMode", JSON.stringify(next)).catch(()=>{});
+      return next;
+    });
+  };
 
   const T = darkMode ? DARK : LIGHT;
 
@@ -784,8 +831,8 @@ export default function App(){
   const [showPlaceholder,setShowPlaceholder] = useState(false);
   const [microJogoId,setMicroJogoId] = useState(JOGOS_REAIS[0].id);
 
-  const saveJogo=j=>setJogos(js=>js.map(x=>x.id===j.id?j:x));
-  const addJogo=j=>{setJogos(js=>[...js,j]);setNovo(false);setNovoRapido(null);};
+  const saveJogo=j=>setJogosP(js=>js.map(x=>x.id===j.id?j:x));
+  const addJogo=j=>{setJogosP(js=>[...js,j]);setNovo(false);setNovoRapido(null);};
 
   const totalOrc  = RESUMO_CATS.reduce((s,c)=>s+c.orcado,0);
   const totalProv = RESUMO_CATS.reduce((s,c)=>s+c.provisionado,0);
@@ -833,7 +880,7 @@ export default function App(){
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
             <button
-              onClick={()=>setDarkMode(d=>!d)}
+              onClick={()=>setDarkModeP(d=>!d)}
               style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:13,color:"#fff",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
               {darkMode ? "☀️ Claro" : "🌙 Escuro"}
             </button>
@@ -969,7 +1016,6 @@ export default function App(){
                         <td style={{padding:"10px 12px",fontSize:13,color:"#3b82f6",whiteSpace:"nowrap"}}>{fmtK(p)}</td>
                         <td style={{padding:"10px 12px",fontSize:13,color:"#f59e0b",whiteSpace:"nowrap"}}>{fmtK(r)}</td>
                         <td style={{padding:"10px 12px",fontWeight:600,color:(o-p)>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-p)}</td>
-                        <td style={{padding:"10px 12px",fontWeight:600,color:(o-p)>=0?"#a3e635":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-p)}</td>
                         <td style={{padding:"10px 12px"}}>
                           <button onClick={()=>{setMicroJogoId(j.id);setTab("micro");}}
                             style={{...btnStyle,background:"#1d4ed8",padding:"4px 10px",fontSize:11}}>🔍</button>
@@ -988,7 +1034,7 @@ export default function App(){
         )}
 
         {tab==="serviços"&&(
-          <TabServicos servicos={servicos} setServicos={setServicos} T={T}/>
+          <TabServicos servicos={servicos} setServicos={setServicosP} T={T}/>
         )}
 
         {tab==="savings"&&(<>
