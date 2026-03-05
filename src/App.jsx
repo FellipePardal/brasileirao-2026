@@ -91,7 +91,7 @@ const catTotal = (subs,cat) => cat.subs.reduce((s,sub)=>s+(subs?.[sub.key]||0),0
 const makeJogo = (id,rodada,cat,cidade,data,hora,mandante,visitante,detentor) => {
   const defs = getJogoDefaults(id,cat,detentor);
   return {id,rodada,categoria:cat,cidade,data,hora,mandante,visitante,detentor,
-    orcado:{...defs},provisionado:{...defs},realizado:{...allSubKeys()}};
+    orcado:{...defs},provisionado:{...allSubKeys()},realizado:{...allSubKeys()}};
 };
 
 const JOGOS_REAIS = [
@@ -188,6 +188,170 @@ const CustomTooltip=({active,payload,label,T})=>{
 
 const SECAO_COLORS = {"Pessoal":"#3b82f6","Transmissão":"#22c55e","Infraestrutura e Distribuição de Sinais":"#f59e0b"};
 
+// ─── NOVA ABA: RELATÓRIO ────────────────────────────────────────────────────
+function TabRelatorio({jogos, servicos, T}) {
+  const divulgados = jogos.filter(j=>j.mandante!=="A definir");
+  const [filtroRod, setFiltroRod] = useState("Todas");
+  const [filtroCat, setFiltroCat] = useState("Todas");
+
+  const jogosF = divulgados.filter(j=>
+    (filtroRod==="Todas"||j.rodada===parseInt(filtroRod))&&
+    (filtroCat==="Todas"||j.categoria===filtroCat)
+  );
+
+  // Totais por categoria de custo
+  const catTotals = CATS.map(cat=>{
+    const orc  = jogosF.reduce((s,j)=>s+catTotal(j.orcado,cat),0);
+    const prov = jogosF.reduce((s,j)=>s+catTotal(j.provisionado,cat),0);
+    const real = jogosF.reduce((s,j)=>s+catTotal(j.realizado,cat),0);
+    return {label:cat.label, color:cat.color, orc, prov, real};
+  });
+
+  const totOrc  = catTotals.reduce((s,c)=>s+c.orc,0);
+  const totProv = catTotals.reduce((s,c)=>s+c.prov,0);
+  const totReal = catTotals.reduce((s,c)=>s+c.real,0);
+
+  // Breakdown por sub-item agregado
+  const subAgg = {};
+  CATS.forEach(cat=>{
+    cat.subs.forEach(sub=>{
+      subAgg[sub.key]={label:sub.label,catLabel:cat.label,catColor:cat.color,orc:0,prov:0,real:0};
+    });
+  });
+  jogosF.forEach(j=>{
+    CATS.forEach(cat=>{
+      cat.subs.forEach(sub=>{
+        subAgg[sub.key].orc  += j.orcado?.[sub.key]||0;
+        subAgg[sub.key].prov += j.provisionado?.[sub.key]||0;
+        subAgg[sub.key].real += j.realizado?.[sub.key]||0;
+      });
+    });
+  });
+  const subRows = Object.values(subAgg).filter(r=>r.orc>0||r.prov>0||r.real>0);
+
+  const allServItens = servicos.flatMap(s=>s.itens);
+  const sOrc  = allServItens.reduce((s,x)=>s+x.orcado,0);
+  const sReal = allServItens.reduce((s,x)=>s+x.realizado,0);
+
+  const grandOrc  = totOrc  + sOrc;
+  const grandReal = totReal + sReal;
+
+  const rodadasList=["Todas",...Array.from(new Set(divulgados.map(j=>j.rodada))).sort((a,b)=>a-b).map(String)];
+
+  return(
+    <div>
+      {/* Filtros */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+        {rodadasList.map(r=>(
+          <button key={r} onClick={()=>setFiltroRod(r)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,
+            background:filtroRod===r?"#22c55e":T.card,color:filtroRod===r?"#fff":T.textMd}}>{r==="Todas"?"Todas":`Rd ${r}`}</button>
+        ))}
+        <div style={{width:1,background:T.border,margin:"0 4px"}}/>
+        {["Todas","B1","B2"].map(c=>(
+          <button key={c} onClick={()=>setFiltroCat(c)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,
+            background:filtroCat===c?"#f59e0b":T.card,color:filtroCat===c?"#000":T.textMd}}>{c==="Todas"?"B1+B2":c}</button>
+        ))}
+      </div>
+
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:24}}>
+        <KPI label="Total Orçado (jogos+fixos)" value={fmt(grandOrc)} sub={`${jogosF.length} jogos selecionados`} color="#22c55e" T={T}/>
+        <KPI label="Total Realizado" value={fmt(grandReal)} sub={`${grandOrc?((grandReal/grandOrc)*100).toFixed(1):0}% executado`} color="#f59e0b" T={T}/>
+        <KPI label="Saving Geral" value={fmt(grandOrc-grandReal)} sub="Orçado - Realizado" color={(grandOrc-grandReal)>=0?"#a3e635":"#ef4444"} T={T}/>
+        <KPI label="Custo Médio / Jogo" value={jogosF.length?fmt(totOrc/jogosF.length):"—"} sub="Orçado variável" color="#8b5cf6" T={T}/>
+      </div>
+
+      {/* Resumo por categoria de custo */}
+      <div style={{background:T.card,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}>
+          <h3 style={{margin:0,fontSize:14,color:T.textMd}}>Custos Variáveis por Categoria</h3>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+            <thead><tr style={{background:T.bg}}>
+              {["Categoria","Orçado","Provisionado","Realizado","Saving","% Exec."].map(h=>
+                <th key={h} style={{padding:"10px 16px",textAlign:h==="Categoria"?"left":"right",color:T.textSm,fontSize:11}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {catTotals.map(c=>{
+                const sv=c.orc-c.real;
+                const pct=c.orc?((c.real/c.orc)*100).toFixed(1):0;
+                return(
+                  <tr key={c.label} style={{borderTop:`1px solid ${T.border}`}}>
+                    <td style={{padding:"10px 16px",fontWeight:600,color:c.color}}>{c.label}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right",color:T.text}}>{fmt(c.orc)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right",color:"#3b82f6"}}>{fmt(c.prov)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right",color:"#f59e0b"}}>{fmt(c.real)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right",fontWeight:700,color:sv>=0?"#a3e635":"#ef4444"}}>{fmt(sv)}</td>
+                    <td style={{padding:"10px 16px",textAlign:"right",color:T.textMd}}>{pct}%</td>
+                  </tr>
+                );
+              })}
+              <tr style={{borderTop:`2px solid ${T.muted}`,background:T.bg,fontWeight:700}}>
+                <td style={{padding:"12px 16px",color:T.text}}>TOTAL VARIÁVEL</td>
+                <td style={{padding:"12px 16px",textAlign:"right",color:"#22c55e"}}>{fmt(totOrc)}</td>
+                <td style={{padding:"12px 16px",textAlign:"right",color:"#3b82f6"}}>{fmt(totProv)}</td>
+                <td style={{padding:"12px 16px",textAlign:"right",color:"#f59e0b"}}>{fmt(totReal)}</td>
+                <td style={{padding:"12px 16px",textAlign:"right",color:(totOrc-totReal)>=0?"#a3e635":"#ef4444"}}>{fmt(totOrc-totReal)}</td>
+                <td style={{padding:"12px 16px",textAlign:"right",color:T.textMd}}>{totOrc?((totReal/totOrc)*100).toFixed(1):0}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Top sub-itens de custo */}
+      <div style={{background:T.card,borderRadius:12,overflow:"hidden",marginBottom:20}}>
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}>
+          <h3 style={{margin:0,fontSize:14,color:T.textMd}}>Ranking de Sub-itens (por Orçado)</h3>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
+            <thead><tr style={{background:T.bg}}>
+              {["#","Item","Categoria","Orçado","Realizado","Saving","% do Total"].map(h=>
+                <th key={h} style={{padding:"8px 14px",textAlign:h==="Item"||h==="Categoria"?"left":"right",color:T.textSm,fontSize:11}}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {[...subRows].sort((a,b)=>b.orc-a.orc).map((r,i)=>{
+                const sv=r.orc-r.real;
+                const pct=totOrc?(r.orc/totOrc*100).toFixed(1):0;
+                return(
+                  <tr key={r.label} style={{borderTop:`1px solid ${T.border}`}}>
+                    <td style={{padding:"8px 14px",color:T.textSm,fontSize:11}}>{i+1}</td>
+                    <td style={{padding:"8px 14px",fontWeight:600,color:T.text,fontSize:13}}>{r.label}</td>
+                    <td style={{padding:"8px 14px"}}><Pill label={r.catLabel} color={r.catColor}/></td>
+                    <td style={{padding:"8px 14px",textAlign:"right",color:T.text}}>{fmt(r.orc)}</td>
+                    <td style={{padding:"8px 14px",textAlign:"right",color:"#f59e0b"}}>{fmt(r.real)}</td>
+                    <td style={{padding:"8px 14px",textAlign:"right",color:sv>=0?"#a3e635":"#ef4444",fontWeight:600}}>{fmt(sv)}</td>
+                    <td style={{padding:"8px 14px",textAlign:"right"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"flex-end"}}>
+                        <span style={{color:T.textMd,fontSize:12}}>{pct}%</span>
+                        <div style={{width:60,background:T.border,borderRadius:4,height:6}}>
+                          <div style={{width:`${Math.min(100,pct)}%`,height:"100%",borderRadius:4,background:r.catColor}}/>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Fixos resumo */}
+      <div style={{background:T.card,borderRadius:12,padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+        <span style={{color:T.textMd,fontWeight:700,fontSize:13}}>Serviços Fixos (consolidado)</span>
+        <div style={{display:"flex",gap:20,fontSize:13,flexWrap:"wrap"}}>
+          <span>Orçado: <b style={{color:"#22c55e"}}>{fmt(sOrc)}</b></span>
+          <span>Realizado: <b style={{color:"#f59e0b"}}>{fmt(sReal)}</b></span>
+          <span>Saving: <b style={{color:(sOrc-sReal)>=0?"#a3e635":"#ef4444"}}>{fmt(sOrc-sReal)}</b></span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TabServicos({servicos, setServicos, T}) {
   const [editing, setEditing] = useState(null);
   const [draft,   setDraft]   = useState(null);
@@ -206,6 +370,9 @@ function TabServicos({servicos, setServicos, T}) {
   const addItem = (secao) => {
     const newItem = {id:Date.now(),nome:"Novo serviço",orcado:0,provisionado:0,realizado:0,obs:""};
     setServicos(ss=>ss.map(s=>s.secao===secao?{...s,itens:[...s.itens,newItem]}:s));
+  };
+  const deleteItem = (secao, itemId) => {
+    setServicos(ss=>ss.map(s=>s.secao===secao?{...s,itens:s.itens.filter(it=>it.id!==itemId)}:s));
   };
 
   const IS = iSty(T);
@@ -285,7 +452,10 @@ function TabServicos({servicos, setServicos, T}) {
                                 <button onClick={cancelEdit} style={{...btnStyle,background:"#475569",padding:"4px 10px",fontSize:11}}>✕</button>
                                 <button onClick={saveEdit}   style={{...btnStyle,background:"#22c55e",padding:"4px 10px",fontSize:11}}>✓</button>
                               </div>
-                            :<button onClick={()=>startEdit(item)} style={{...btnStyle,background:T.border,padding:"4px 10px",fontSize:11}}>✏</button>}
+                            :<div style={{display:"flex",gap:6}}>
+                                <button onClick={()=>startEdit(item)} style={{...btnStyle,background:T.border,padding:"4px 10px",fontSize:11}}>✏</button>
+                                <button onClick={()=>deleteItem(secao,item.id)} style={{...btnStyle,background:"#7f1d1d",padding:"4px 10px",fontSize:11}}>🗑</button>
+                              </div>}
                         </td>
                       </tr>
                     );
@@ -428,17 +598,27 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
   const jogo=divulgados[idx];
   const [draft,setDraft]=useState(null);
   const [editing,setEditing]=useState(false);
+  const [activeTab,setActiveTab]=useState("orcado");
 
   const setVal=(tipo,subkey,v)=>setDraft(d=>({...d,[tipo]:{...d[tipo],[subkey]:parseFloat(v)||0}}));
   const startEdit=()=>{setDraft(JSON.parse(JSON.stringify(jogo)));setEditing(true);};
   const cancelEdit=()=>{setDraft(null);setEditing(false);};
   const saveEdit=()=>{onSave(draft);setEditing(false);setDraft(null);};
+  const copyOrcadoToProvisionado=()=>{
+    if(!draft) return;
+    setDraft(d=>({...d,provisionado:{...d.orcado}}));
+  };
 
   const data=editing?draft:jogo;
   const IS = iSty(T);
   if(!jogo) return <p style={{color:T.textSm,padding:20}}>Nenhum jogo selecionado.</p>;
 
   const totOrc=subTotal(data.orcado), totProv=subTotal(data.provisionado), totReal=subTotal(data.realizado);
+
+  // Radar-style comparison for the 3 columns
+  const compareTabs = ["orcado","provisionado","realizado"];
+  const compareColors = {"orcado":"#22c55e","provisionado":"#3b82f6","realizado":"#f59e0b"};
+  const compareTotals = {"orcado":totOrc,"provisionado":totProv,"realizado":totReal};
 
   return(
     <div>
@@ -453,11 +633,14 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
           <button onClick={()=>idx<divulgados.length-1&&onChangeJogo(divulgados[idx+1].id)} disabled={idx===divulgados.length-1}
             style={{...btnStyle,background:idx===divulgados.length-1?T.card:T.border,padding:"6px 14px",opacity:idx===divulgados.length-1?0.4:1,color:T.text}}>→</button>
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {!editing
             ?<button onClick={startEdit} style={{...btnStyle,background:"#3b82f6"}}>✏ Editar valores</button>
-            :<><button onClick={cancelEdit} style={{...btnStyle,background:"#475569"}}>Cancelar</button>
-               <button onClick={saveEdit} style={{...btnStyle,background:"#22c55e"}}>💾 Salvar</button></>}
+            :<>
+               {activeTab==="provisionado"&&<button onClick={copyOrcadoToProvisionado} style={{...btnStyle,background:"#6366f1",fontSize:12}}>↓ Copiar Orçado</button>}
+               <button onClick={cancelEdit} style={{...btnStyle,background:"#475569"}}>Cancelar</button>
+               <button onClick={saveEdit} style={{...btnStyle,background:"#22c55e"}}>💾 Salvar</button>
+             </>}
         </div>
       </div>
 
@@ -483,6 +666,18 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
           ))}
         </div>
       </div>
+
+      {/* Sub-tab toggle for which column to focus when editing */}
+      {editing && (
+        <div style={{display:"flex",gap:4,marginBottom:16}}>
+          {compareTabs.map(t=>(
+            <button key={t} onClick={()=>setActiveTab(t)} style={{padding:"6px 16px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:600,
+              background:activeTab===t?compareColors[t]:T.card,color:activeTab===t?"#fff":T.textMd,textTransform:"capitalize"}}>
+              {t.charAt(0).toUpperCase()+t.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {CATS.map(cat=>{
         const cOrc=catTotal(data.orcado,cat), cProv=catTotal(data.provisionado,cat), cReal=catTotal(data.realizado,cat);
@@ -514,9 +709,10 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
                         {["orcado","provisionado","realizado"].map(tipo=>{
                           const val=data[tipo]?.[sub.key]||0;
                           const col=tipo==="orcado"?"#22c55e":tipo==="provisionado"?"#3b82f6":"#f59e0b";
+                          const isActive = !editing || activeTab===tipo;
                           return(
-                            <td key={tipo} style={{padding:"8px 20px",textAlign:"right"}}>
-                              {editing
+                            <td key={tipo} style={{padding:"8px 20px",textAlign:"right",opacity:editing&&!isActive?0.35:1}}>
+                              {editing&&isActive
                                 ?<input value={draft[tipo]?.[sub.key]||0} onChange={e=>setVal(tipo,sub.key,e.target.value)}
                                     style={{...IS,width:90,textAlign:"right",padding:"4px 8px",color:col}}/>
                                 :<span style={{fontSize:13,color:val===0?T.muted:col}}>{fmt(val)}</span>}
@@ -551,20 +747,35 @@ export default function App(){
 
   const T = darkMode ? DARK : LIGHT;
 
-  const fixosCalc = useMemo(() => {
-    return SERVICOS_INIT.map(secao => {
-      const s = servicos.find(x=>x.secao===secao.secao);
-      const itens = s ? s.itens : [];
-      return {
-        nome: secao.secao,
-        orcado:      itens.reduce((t,i)=>t+i.orcado,0),
-        realizado:   itens.reduce((t,i)=>t+i.realizado,0),
-        tipo: "fixo"
-      };
+  // Variáveis calculadas dinamicamente dos jogos
+  const varCalc = useMemo(() => {
+    const allJogos = jogos.filter(j => j.mandante !== "A definir"); // só jogos divulgados
+    const result = CATS.map(cat => {
+      const orc  = allJogos.reduce((s,j) => s + catTotal(j.orcado, cat), 0);
+      const prov = allJogos.reduce((s,j) => s + catTotal(j.provisionado, cat), 0);
+      const real = allJogos.reduce((s,j) => s + catTotal(j.realizado, cat), 0);
+      return { nome: cat.label, orcado: orc, provisionado: prov, realizado: real, tipo: "variavel" };
     });
+    // Extra: sub-item "extra" já está dentro de Operações; linha separada para visibilidade
+    const extraOrc  = allJogos.reduce((s,j) => s + (j.orcado?.extra||0), 0);
+    const extraProv = allJogos.reduce((s,j) => s + (j.provisionado?.extra||0), 0);
+    const extraReal = allJogos.reduce((s,j) => s + (j.realizado?.extra||0), 0);
+    result.push({ nome: "Extra", orcado: extraOrc, provisionado: extraProv, realizado: extraReal, tipo: "variavel" });
+    return result;
+  }, [jogos]);
+
+  // Fixos calculados da aba Serviços
+  const fixosCalc = useMemo(() => {
+    return servicos.map(secao => ({
+      nome:         secao.secao,
+      orcado:       secao.itens.reduce((t,i) => t + i.orcado, 0),
+      provisionado: secao.itens.reduce((t,i) => t + i.provisionado, 0),
+      realizado:    secao.itens.reduce((t,i) => t + i.realizado, 0),
+      tipo: "fixo"
+    }));
   }, [servicos]);
 
-  const RESUMO_CATS = [...RESUMO_VARIAVEIS, ...fixosCalc];
+  const RESUMO_CATS = [...varCalc, ...fixosCalc];
   const [tab,setTab]           = useState("dashboard");
   const [showNovo,setNovo]     = useState(false);
   const [novoRapido,setNovoRapido] = useState(null);
@@ -576,9 +787,10 @@ export default function App(){
   const saveJogo=j=>setJogos(js=>js.map(x=>x.id===j.id?j:x));
   const addJogo=j=>{setJogos(js=>[...js,j]);setNovo(false);setNovoRapido(null);};
 
-  const totalOrc=RESUMO_CATS.reduce((s,c)=>s+c.orcado,0);
-  const totalReal=RESUMO_CATS.reduce((s,c)=>s+c.realizado,0);
-  const pctGasto=totalOrc?((totalReal/totalOrc)*100).toFixed(1):0;
+  const totalOrc  = RESUMO_CATS.reduce((s,c)=>s+c.orcado,0);
+  const totalProv = RESUMO_CATS.reduce((s,c)=>s+c.provisionado,0);
+  const totalReal = RESUMO_CATS.reduce((s,c)=>s+c.realizado,0);
+  const pctGasto  = totalOrc?((totalReal/totalOrc)*100).toFixed(1):0;
 
   const divulgados=jogos.filter(j=>j.mandante!=="A definir");
   const aDivulgar=jogos.filter(j=>j.mandante==="A definir");
@@ -607,7 +819,7 @@ export default function App(){
   const totProvJogos=jogosFiltered.reduce((s,j)=>s+subTotal(j.provisionado),0);
   const totRealJogos=jogosFiltered.reduce((s,j)=>s+subTotal(j.realizado),0);
 
-  const TABS=["dashboard","serviços","jogos","micro","savings","gráficos"];
+  const TABS=["dashboard","serviços","jogos","micro","savings","gráficos","relatório"];
 
   return(
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"'Inter',sans-serif",paddingBottom:40}}>
@@ -622,8 +834,7 @@ export default function App(){
           <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
             <button
               onClick={()=>setDarkMode(d=>!d)}
-              title={darkMode?"Modo claro":"Modo escuro"}
-              style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:13,color:"#fff",fontWeight:600,display:"flex",alignItems:"center",gap:6,backdropFilter:"blur(4px)"}}>
+              style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:20,padding:"5px 12px",cursor:"pointer",fontSize:13,color:"#fff",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
               {darkMode ? "☀️ Claro" : "🌙 Escuro"}
             </button>
             <div style={{textAlign:"right"}}>
@@ -632,7 +843,6 @@ export default function App(){
             </div>
           </div>
         </div>
-        {/* Tabs — scroll horizontal no mobile */}
         <div style={{display:"flex",gap:2,marginTop:16,overflowX:"auto",WebkitOverflowScrolling:"touch",paddingBottom:0}}>
           {TABS.map(t=>(
             <button key={t} onClick={()=>setTab(t)} style={{
@@ -649,11 +859,12 @@ export default function App(){
 
         {tab==="dashboard"&&(<>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:24}}>
-            <KPI label="Total Orçado" value={fmt(totalOrc)} sub="Budget aprovado" color="#22c55e" T={T}/>
-            <KPI label="Total Realizado" value={fmt(totalReal)} sub={`${pctGasto}% executado`} color="#3b82f6" T={T}/>
-            <KPI label="Saldo Disponível" value={fmt(totalOrc-totalReal)} sub="Orçado - Realizado" color="#f59e0b" T={T}/>
-            <KPI label="Jogos Divulgados" value={`${divulgados.length} / 76`} sub={`${aDivulgar.length} aguardando`} color="#8b5cf6" T={T}/>
+            <KPI label="Total Orçado" value={fmt(totalOrc)} sub="Jogos + serviços fixos" color="#22c55e" T={T}/>
+            <KPI label="Total Provisionado" value={fmt(totalProv)} sub={`${totalOrc?((totalProv/totalOrc)*100).toFixed(1):0}% do orçado`} color="#3b82f6" T={T}/>
+            <KPI label="Total Realizado" value={fmt(totalReal)} sub={`${pctGasto}% executado`} color="#f59e0b" T={T}/>
+            <KPI label="Saldo Disponível" value={fmt(totalOrc-totalReal)} sub="Orçado - Realizado" color={(totalOrc-totalReal)>=0?"#a3e635":"#ef4444"} T={T}/>
           </div>
+
           <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
               <h3 style={{margin:0,fontSize:14,color:T.textMd}}>Resumo por Categoria</h3>
@@ -665,7 +876,7 @@ export default function App(){
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
                 <thead><tr style={{background:T.bg}}>
-                  {["Categoria","Tipo","Orçado","Realizado","Saldo","% Exec.","Progresso"].map(h=>
+                  {["Categoria","Tipo","Orçado","Provisionado","Realizado","Saldo","% Exec.","Progresso"].map(h=>
                     <th key={h} style={{padding:"10px 16px",textAlign:h==="Categoria"||h==="Tipo"?"left":"right",color:T.textSm,fontSize:12,whiteSpace:"nowrap"}}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -677,7 +888,8 @@ export default function App(){
                         <td style={{padding:"12px 16px",fontWeight:600,whiteSpace:"nowrap",color:T.text}}>{c.nome}</td>
                         <td style={{padding:"12px 16px"}}><Pill label={c.tipo} color={TIPO_COLOR[c.tipo]}/></td>
                         <td style={{padding:"12px 16px",textAlign:"right",whiteSpace:"nowrap",color:T.text}}>{fmt(c.orcado)}</td>
-                        <td style={{padding:"12px 16px",textAlign:"right",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(c.realizado)}</td>
+                        <td style={{padding:"12px 16px",textAlign:"right",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(c.provisionado||0)}</td>
+                        <td style={{padding:"12px 16px",textAlign:"right",color:"#f59e0b",whiteSpace:"nowrap"}}>{fmt(c.realizado)}</td>
                         <td style={{padding:"12px 16px",textAlign:"right",fontWeight:600,color:saldo<0?"#ef4444":"#22c55e",whiteSpace:"nowrap"}}>{fmt(saldo)}</td>
                         <td style={{padding:"12px 16px",textAlign:"right",color:T.text}}>{pct.toFixed(1)}%</td>
                         <td style={{padding:"12px 20px"}}>
@@ -691,8 +903,9 @@ export default function App(){
                   <tr style={{borderTop:`2px solid ${T.muted}`,background:T.bg,fontWeight:700}}>
                     <td colSpan={2} style={{padding:"12px 16px",color:T.text}}>TOTAL GERAL</td>
                     <td style={{padding:"12px 16px",textAlign:"right",color:"#22c55e",whiteSpace:"nowrap"}}>{fmt(totalOrc)}</td>
-                    <td style={{padding:"12px 16px",textAlign:"right",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(totalReal)}</td>
-                    <td style={{padding:"12px 16px",textAlign:"right",color:"#f59e0b",whiteSpace:"nowrap"}}>{fmt(totalOrc-totalReal)}</td>
+                    <td style={{padding:"12px 16px",textAlign:"right",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(totalProv)}</td>
+                    <td style={{padding:"12px 16px",textAlign:"right",color:"#f59e0b",whiteSpace:"nowrap"}}>{fmt(totalReal)}</td>
+                    <td style={{padding:"12px 16px",textAlign:"right",color:(totalOrc-totalReal)>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmt(totalOrc-totalReal)}</td>
                     <td style={{padding:"12px 16px",textAlign:"right",color:T.text}}>{pctGasto}%</td>
                     <td/>
                   </tr>
@@ -735,7 +948,7 @@ export default function App(){
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
                 <thead><tr style={{background:T.bg}}>
-                  {["Jogo","Rd","Cidade","Data","Cat.","Detentor","Orçado","Provisionado","Realizado","Sav.Prov","Sav.Real",""].map(h=>
+                  {["Jogo","Rd","Cidade","Data","Cat.","Detentor","Orçado","Provisionado","Realizado","Saving",""].map(h=>
                     <th key={h} style={{padding:"10px 12px",textAlign:"left",color:T.textSm,fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}
                 </tr></thead>
                 <tbody>
@@ -756,7 +969,7 @@ export default function App(){
                         <td style={{padding:"10px 12px",fontSize:13,color:"#3b82f6",whiteSpace:"nowrap"}}>{fmtK(p)}</td>
                         <td style={{padding:"10px 12px",fontSize:13,color:"#f59e0b",whiteSpace:"nowrap"}}>{fmtK(r)}</td>
                         <td style={{padding:"10px 12px",fontWeight:600,color:(o-p)>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-p)}</td>
-                        <td style={{padding:"10px 12px",fontWeight:600,color:(o-r)>=0?"#a3e635":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-r)}</td>
+                        <td style={{padding:"10px 12px",fontWeight:600,color:(o-p)>=0?"#a3e635":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-p)}</td>
                         <td style={{padding:"10px 12px"}}>
                           <button onClick={()=>{setMicroJogoId(j.id);setTab("micro");}}
                             style={{...btnStyle,background:"#1d4ed8",padding:"4px 10px",fontSize:11}}>🔍</button>
@@ -798,6 +1011,7 @@ export default function App(){
             <KPI label="Saving Provisionado" value={fmt(totOrcJogos-totProvJogos)} sub={`em ${divulgados.length} jogos`} color="#3b82f6" T={T}/>
             <KPI label="Saving Realizado" value={fmt(totOrcJogos-totRealJogos)} sub="Confirmado" color="#22c55e" T={T}/>
             <KPI label="% Saving Prov." value={totOrcJogos?`${(((totOrcJogos-totProvJogos)/totOrcJogos)*100).toFixed(1)}%`:"—"} sub="do budget" color="#f59e0b" T={T}/>
+            <KPI label="Custo Médio / Jogo" value={jogosFiltered.length?fmt(totOrcJogos/jogosFiltered.length):"—"} sub="orçado" color="#8b5cf6" T={T}/>
           </div>
           <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}>
@@ -881,6 +1095,11 @@ export default function App(){
             </div>
           </div>
         )}
+
+        {tab==="relatório"&&(
+          <TabRelatorio jogos={jogos} servicos={servicos} T={T}/>
+        )}
+
       </div>
 
       {showNovo&&<NovoJogoModal onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
