@@ -600,17 +600,30 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
   const [editing,setEditing]=useState(false);
   const [activeTab,setActiveTab]=useState("orcado");
 
-  const setVal=(tipo,subkey,v)=>setDraft(d=>({...d,[tipo]:{...d[tipo],[subkey]:parseFloat(v)||0}}));
-  const startEdit=()=>{setDraft(JSON.parse(JSON.stringify(jogo)));setEditing(true);};
-  const cancelEdit=()=>{setDraft(null);setEditing(false);};
+  const emptyNums = () => allSubKeys();
+
+  const safeDraft = (j) => ({
+    ...j,
+    orcado:       {...emptyNums(), ...(j.orcado||{})},
+    provisionado: {...emptyNums(), ...(j.provisionado||{})},
+    realizado:    {...emptyNums(), ...(j.realizado||{})},
+  });
+
+  const setVal=(tipo,subkey,v)=>{
+    const num = v === "" ? "" : (parseFloat(v) || 0);
+    setDraft(d=>({...d,[tipo]:{...d[tipo],[subkey]:num}}));
+  };
+
+  const startEdit=()=>{ setDraft(safeDraft(jogo)); setEditing(true); };
+  const cancelEdit=()=>{ setDraft(null); setEditing(false); };
+
   const saveEdit=()=>{
-    // Sanitiza todos os sub-valores numéricos antes de salvar
-    const sanitize = (obj) => {
-      const out = {};
-      Object.keys(obj).forEach(k => { out[k] = parseFloat(obj[k]) || 0; });
+    const sanitize=(obj)=>{
+      const out={};
+      Object.keys(obj||{}).forEach(k=>{ out[k]=parseFloat(obj[k])||0; });
       return out;
     };
-    const clean = {
+    const clean={
       ...draft,
       orcado:       sanitize(draft.orcado),
       provisionado: sanitize(draft.provisionado),
@@ -620,21 +633,26 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
     setEditing(false);
     setDraft(null);
   };
+
   const copyOrcadoToProvisionado=()=>{
     if(!draft) return;
     setDraft(d=>({...d,provisionado:{...d.orcado}}));
   };
 
-  const data=editing?draft:jogo;
+  const data = editing && draft ? draft : (jogo || {});
   const IS = iSty(T);
+
   if(!jogo) return <p style={{color:T.textSm,padding:20}}>Nenhum jogo selecionado.</p>;
 
-  const totOrc=subTotal(data.orcado), totProv=subTotal(data.provisionado), totReal=subTotal(data.realizado);
+  const safeOrc  = {...emptyNums(), ...(data.orcado||{})};
+  const safeProv = {...emptyNums(), ...(data.provisionado||{})};
+  const safeReal = {...emptyNums(), ...(data.realizado||{})};
+  const totOrc  = subTotal(safeOrc);
+  const totProv = subTotal(safeProv);
+  const totReal = subTotal(safeReal);
 
-  // Radar-style comparison for the 3 columns
-  const compareTabs = ["orcado","provisionado","realizado"];
-  const compareColors = {"orcado":"#22c55e","provisionado":"#3b82f6","realizado":"#f59e0b"};
-  const compareTotals = {"orcado":totOrc,"provisionado":totProv,"realizado":totReal};
+  const compareTabs=["orcado","provisionado","realizado"];
+  const compareColors={"orcado":"#22c55e","provisionado":"#3b82f6","realizado":"#f59e0b"};
 
   return(
     <div>
@@ -696,7 +714,7 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
       )}
 
       {CATS.map(cat=>{
-        const cOrc=catTotal(data.orcado,cat), cProv=catTotal(data.provisionado,cat), cReal=catTotal(data.realizado,cat);
+        const cOrc=catTotal(safeOrc,cat), cProv=catTotal(safeProv,cat), cReal=catTotal(safeReal,cat);
         return(
           <div key={cat.key} style={{background:T.card,borderRadius:12,overflow:"hidden",marginBottom:16}}>
             <div style={{padding:"12px 20px",background:T.bg,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
@@ -705,7 +723,7 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
                 <span style={{color:T.textMd}}>Orç: <b style={{color:"#22c55e"}}>{fmt(cOrc)}</b></span>
                 <span style={{color:T.textMd}}>Prov: <b style={{color:"#3b82f6"}}>{fmt(cProv)}</b></span>
                 <span style={{color:T.textMd}}>Real: <b style={{color:"#f59e0b"}}>{fmt(cReal)}</b></span>
-                <span style={{color:T.textMd}}>Saving: <b style={{color:(cOrc-cReal)>=0?"#a3e635":"#ef4444"}}>{fmt(cOrc-cReal)}</b></span>
+                <span style={{color:T.textMd}}>Saving: <b style={{color:(cOrc-cProv)>=0?"#a3e635":"#ef4444"}}>{fmt(cOrc-cProv)}</b></span>
               </div>
             </div>
             <div style={{overflowX:"auto"}}>
@@ -717,25 +735,32 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
                 </tr></thead>
                 <tbody>
                   {cat.subs.map(sub=>{
-                    const o=data.orcado?.[sub.key]||0,p=data.provisionado?.[sub.key]||0,r=data.realizado?.[sub.key]||0;
+                    const o=safeOrc[sub.key]||0, p=safeProv[sub.key]||0, r=safeReal[sub.key]||0;
                     if(!editing&&o===0&&p===0&&r===0) return null;
+                    const draftTipo = editing && draft ? {
+                      orcado:       {...emptyNums(),...(draft.orcado||{})},
+                      provisionado: {...emptyNums(),...(draft.provisionado||{})},
+                      realizado:    {...emptyNums(),...(draft.realizado||{})},
+                    } : null;
                     return(
                       <tr key={sub.key} style={{borderTop:`1px solid ${T.border}`}}>
                         <td style={{padding:"10px 20px",fontSize:13,color:T.text}}>{sub.label}</td>
                         {["orcado","provisionado","realizado"].map(tipo=>{
-                          const val=data[tipo]?.[sub.key]||0;
+                          const val=tipo==="orcado"?o:tipo==="provisionado"?p:r;
                           const col=tipo==="orcado"?"#22c55e":tipo==="provisionado"?"#3b82f6":"#f59e0b";
                           const isActive = !editing || activeTab===tipo;
                           return(
                             <td key={tipo} style={{padding:"8px 20px",textAlign:"right",opacity:editing&&!isActive?0.35:1}}>
-                              {editing&&isActive
-                                ?<input value={draft[tipo]?.[sub.key]||0} onChange={e=>setVal(tipo,sub.key,e.target.value)}
+                              {editing&&isActive&&draftTipo
+                                ?<input
+                                    value={draftTipo[tipo][sub.key] ?? 0}
+                                    onChange={e=>setVal(tipo,sub.key,e.target.value)}
                                     style={{...IS,width:90,textAlign:"right",padding:"4px 8px",color:col}}/>
                                 :<span style={{fontSize:13,color:val===0?T.muted:col}}>{fmt(val)}</span>}
                             </td>
                           );
                         })}
-                        <td style={{padding:"10px 20px",textAlign:"right",fontWeight:600,color:(o-r)>=0?"#a3e635":"#ef4444",fontSize:13}}>{fmt(o-r)}</td>
+                        <td style={{padding:"10px 20px",textAlign:"right",fontWeight:600,color:(o-p)>=0?"#a3e635":"#ef4444",fontSize:13}}>{fmt(o-p)}</td>
                       </tr>
                     );
                   })}
@@ -744,7 +769,7 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
                     <td style={{padding:"10px 20px",textAlign:"right",color:"#22c55e"}}>{fmt(cOrc)}</td>
                     <td style={{padding:"10px 20px",textAlign:"right",color:"#3b82f6"}}>{fmt(cProv)}</td>
                     <td style={{padding:"10px 20px",textAlign:"right",color:"#f59e0b"}}>{fmt(cReal)}</td>
-                    <td style={{padding:"10px 20px",textAlign:"right",color:(cOrc-cReal)>=0?"#a3e635":"#ef4444"}}>{fmt(cOrc-cReal)}</td>
+                    <td style={{padding:"10px 20px",textAlign:"right",color:(cOrc-cProv)>=0?"#a3e635":"#ef4444"}}>{fmt(cOrc-cProv)}</td>
                   </tr>
                 </tbody>
               </table>
