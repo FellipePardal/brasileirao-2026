@@ -603,7 +603,23 @@ function VisaoMicro({jogos,jogoId,onChangeJogo,onSave,T}){
   const setVal=(tipo,subkey,v)=>setDraft(d=>({...d,[tipo]:{...d[tipo],[subkey]:parseFloat(v)||0}}));
   const startEdit=()=>{setDraft(JSON.parse(JSON.stringify(jogo)));setEditing(true);};
   const cancelEdit=()=>{setDraft(null);setEditing(false);};
-  const saveEdit=()=>{onSave(draft);setEditing(false);setDraft(null);};
+  const saveEdit=()=>{
+    // Sanitiza todos os sub-valores numéricos antes de salvar
+    const sanitize = (obj) => {
+      const out = {};
+      Object.keys(obj).forEach(k => { out[k] = parseFloat(obj[k]) || 0; });
+      return out;
+    };
+    const clean = {
+      ...draft,
+      orcado:       sanitize(draft.orcado),
+      provisionado: sanitize(draft.provisionado),
+      realizado:    sanitize(draft.realizado),
+    };
+    onSave(clean);
+    setEditing(false);
+    setDraft(null);
+  };
   const copyOrcadoToProvisionado=()=>{
     if(!draft) return;
     setDraft(d=>({...d,provisionado:{...d.orcado}}));
