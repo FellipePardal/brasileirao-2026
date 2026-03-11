@@ -1,11 +1,13 @@
 import { useState, useMemo } from "react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 
-import { DARK, LIGHT, CATS, CENARIO_INFO, TIPO_COLOR, PIE_COLORS, LS_JOGOS, LS_SERVICOS, LS_DARK, btnStyle, iSty } from "./constants";
+import { DARK, LIGHT, CATS, TIPO_COLOR, LS_JOGOS, LS_SERVICOS, LS_DARK, btnStyle } from "./constants";
 import { fmt, fmtK, subTotal, catTotal, lsGet, lsSet } from "./utils";
-import { ALL_JOGOS, SERVICOS_INIT, allSubKeys, getDefaults } from "./data";
+import { ALL_JOGOS, SERVICOS_INIT } from "./data";
 import { KPI, Pill, CustomTooltip } from "./components/shared";
 import Home             from "./components/Home";
+import TabJogos         from "./components/tabs/TabJogos";
+import TabSavings       from "./components/tabs/TabSavings";
+import TabGraficos      from "./components/tabs/TabGraficos";
 import TabServicos      from "./components/tabs/TabServicos";
 import TabRelatorio     from "./components/tabs/TabRelatorio";
 import VisaoMicro       from "./components/tabs/VisaoMicro";
@@ -13,7 +15,7 @@ import TabApresentacoes from "./components/tabs/TabApresentacoes";
 import { NovoJogoModal, NovoRapidoModal } from "./components/modals/NovoJogoModal";
 
 // ─── BRASILEIRÃO ──────────────────────────────────────────────────────────────
-function Brasileirao({onBack, T, darkMode, setDarkMode}) {
+function Brasileirao({ onBack, T, darkMode, setDarkMode }) {
   const [jogos, setJogosRaw]       = useState(() => lsGet(LS_JOGOS, ALL_JOGOS));
   const [servicos, setServicosRaw] = useState(() => lsGet(LS_SERVICOS, SERVICOS_INIT));
 
@@ -30,33 +32,33 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
     const allJ = jogos.filter(j => j.mandante !== "A definir");
     const result = CATS.map(cat => ({
       nome: cat.label,
-      orcado:      allJ.reduce((s,j) => s+catTotal(j.orcado, cat), 0),
-      provisionado:allJ.reduce((s,j) => s+catTotal(j.provisionado, cat), 0),
-      realizado:   allJ.reduce((s,j) => s+catTotal(j.realizado, cat), 0),
+      orcado:       allJ.reduce((s,j) => s+catTotal(j.orcado, cat), 0),
+      provisionado: allJ.reduce((s,j) => s+catTotal(j.provisionado, cat), 0),
+      realizado:    allJ.reduce((s,j) => s+catTotal(j.realizado, cat), 0),
       tipo: "variavel",
     }));
     const extraOrc = allJ.reduce((s,j) => s+((j.orcado&&j.orcado.extra)||0), 0);
-    result.push({nome:"Extra", orcado:extraOrc, provisionado:0, realizado:0, tipo:"variavel"});
+    result.push({ nome:"Extra", orcado:extraOrc, provisionado:0, realizado:0, tipo:"variavel" });
     return result;
   }, [jogos]);
 
   const fixosCalc = useMemo(() => servicos.map(s => ({
     nome: s.secao,
-    orcado:      s.itens.reduce((t,i) => t+i.orcado, 0),
-    provisionado:s.itens.reduce((t,i) => t+i.provisionado, 0),
-    realizado:   s.itens.reduce((t,i) => t+i.realizado, 0),
+    orcado:       s.itens.reduce((t,i) => t+i.orcado, 0),
+    provisionado: s.itens.reduce((t,i) => t+i.provisionado, 0),
+    realizado:    s.itens.reduce((t,i) => t+i.realizado, 0),
     tipo: "fixo",
   })), [servicos]);
 
   const RESUMO_CATS = [...varCalc, ...fixosCalc];
 
-  const [tab,            setTab]            = useState("dashboard");
-  const [showNovo,       setNovo]           = useState(false);
-  const [novoRapido,     setNovoRapido]     = useState(null);
-  const [filtroRod,      setFiltroRod]      = useState("Todas");
-  const [filtroCat,      setFiltroCat]      = useState("Todas");
-  const [showPlaceholder,setShowPlaceholder]= useState(false);
-  const [microJogoId,    setMicroJogoId]    = useState(jogos.find(j=>j.mandante!=="A definir")?.id);
+  const [tab,             setTab]             = useState("dashboard");
+  const [showNovo,        setNovo]            = useState(false);
+  const [novoRapido,      setNovoRapido]      = useState(null);
+  const [filtroRod,       setFiltroRod]       = useState("Todas");
+  const [filtroCat,       setFiltroCat]       = useState("Todas");
+  const [showPlaceholder, setShowPlaceholder] = useState(false);
+  const [microJogoId,     setMicroJogoId]     = useState(jogos.find(j=>j.mandante!=="A definir")?.id);
 
   const saveJogo = j => setJogos(js => js.map(x => x.id===j.id ? j : x));
   const addJogo  = j => { setJogos(js => [...js, j]); setNovo(false); setNovoRapido(null); };
@@ -69,7 +71,8 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
   const divulgados  = jogos.filter(j => j.mandante !== "A definir");
   const aDivulgar   = jogos.filter(j => j.mandante === "A definir");
   const rodadasList = ["Todas", ...Array.from(new Set(divulgados.map(j=>j.rodada))).sort((a,b)=>a-b).map(String)];
-  const filtrados   = (showPlaceholder ? jogos : divulgados).filter(j =>
+
+  const filtrados = (showPlaceholder ? jogos : divulgados).filter(j =>
     (filtroRod==="Todas" || j.rodada===parseInt(filtroRod)) &&
     (filtroCat==="Todas" || j.categoria===filtroCat)
   );
@@ -84,30 +87,13 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
     const map = {};
     divulgados.forEach(j => {
       const r = `R${j.rodada}`;
-      if(!map[r]) map[r] = {name:r, Saving:0};
+      if(!map[r]) map[r] = { name:r, Saving:0 };
       map[r].Saving += subTotal(j.orcado) - subTotal(j.provisionado);
     });
     return Object.values(map).sort((a,b) => parseInt(a.name.slice(1))-parseInt(b.name.slice(1)));
   }, [jogos]);
 
   const TABS = ["dashboard","serviços","jogos","micro","savings","gráficos","relatório","apresentações"];
-
-  // ── Filtros reutilizáveis ──────────────────────────────────────────────────
-  const Filtros = () => (
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
-      {rodadasList.map(r => (
-        <button key={r} onClick={()=>setFiltroRod(r)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,background:filtroRod===r?"#22c55e":T.card,color:filtroRod===r?"#fff":T.textMd}}>
-          {r==="Todas" ? "Todas" : `Rd ${r}`}
-        </button>
-      ))}
-      <div style={{width:1,background:T.border,margin:"0 4px"}}/>
-      {["Todas","B1","B2"].map(c => (
-        <button key={c} onClick={()=>setFiltroCat(c)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,background:filtroCat===c?"#f59e0b":T.card,color:filtroCat===c?"#000":T.textMd}}>
-          {c==="Todas" ? "B1+B2" : c}
-        </button>
-      ))}
-    </div>
-  );
 
   return (
     <div style={{minHeight:"100vh",background:T.bg,color:T.text,fontFamily:"'Inter',sans-serif",paddingBottom:40}}>
@@ -147,10 +133,10 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
         {/* ── DASHBOARD ── */}
         {tab==="dashboard" && (<>
           <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:12,marginBottom:24}}>
-            <KPI label="Total Orçado"      value={fmt(totalOrc)}  sub="Jogos + serviços fixos"                          color="#22c55e" T={T}/>
-            <KPI label="Total Provisionado"value={fmt(totalProv)} sub={`${totalOrc?((totalProv/totalOrc)*100).toFixed(1):0}% do orçado`} color="#3b82f6" T={T}/>
-            <KPI label="Total Realizado"   value={fmt(totalReal)} sub={`${pctGasto}% executado`}                        color="#f59e0b" T={T}/>
-            <KPI label="Saldo Disponível"  value={fmt(totalOrc-totalReal)} sub="Orçado - Realizado"                     color={(totalOrc-totalReal)>=0?"#a3e635":"#ef4444"} T={T}/>
+            <KPI label="Total Orçado"       value={fmt(totalOrc)}           sub="Jogos + serviços fixos"                                          color="#22c55e" T={T}/>
+            <KPI label="Total Provisionado" value={fmt(totalProv)}          sub={`${totalOrc?((totalProv/totalOrc)*100).toFixed(1):0}% do orçado`} color="#3b82f6" T={T}/>
+            <KPI label="Total Realizado"    value={fmt(totalReal)}          sub={`${pctGasto}% executado`}                                        color="#f59e0b" T={T}/>
+            <KPI label="Saldo Disponível"   value={fmt(totalOrc-totalReal)} sub="Orçado - Realizado"                                              color={(totalOrc-totalReal)>=0?"#a3e635":"#ef4444"} T={T}/>
           </div>
           <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
@@ -162,7 +148,13 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
             </div>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
-                <thead><tr style={{background:T.bg}}>{["Categoria","Tipo","Orçado","Provisionado","Realizado","Saldo","% Exec.","Progresso"].map(h=><th key={h} style={{padding:"10px 16px",textAlign:h==="Categoria"||h==="Tipo"?"left":"right",color:T.textSm,fontSize:12,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                <thead>
+                  <tr style={{background:T.bg}}>
+                    {["Categoria","Tipo","Orçado","Provisionado","Realizado","Saldo","% Exec.","Progresso"].map(h => (
+                      <th key={h} style={{padding:"10px 16px",textAlign:h==="Categoria"||h==="Tipo"?"left":"right",color:T.textSm,fontSize:12,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
                 <tbody>
                   {RESUMO_CATS.map(c => {
                     const saldo = c.orcado-c.realizado;
@@ -176,7 +168,11 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
                         <td style={{padding:"12px 16px",textAlign:"right",color:"#f59e0b",whiteSpace:"nowrap"}}>{fmt(c.realizado)}</td>
                         <td style={{padding:"12px 16px",textAlign:"right",fontWeight:600,color:saldo<0?"#ef4444":"#22c55e",whiteSpace:"nowrap"}}>{fmt(saldo)}</td>
                         <td style={{padding:"12px 16px",textAlign:"right",color:T.text}}>{pct.toFixed(1)}%</td>
-                        <td style={{padding:"12px 20px"}}><div style={{background:T.border,borderRadius:4,height:8,minWidth:60}}><div style={{background:pct>90?"#ef4444":pct>60?"#f59e0b":"#22c55e",width:`${pct}%`,height:"100%",borderRadius:4}}/></div></td>
+                        <td style={{padding:"12px 20px"}}>
+                          <div style={{background:T.border,borderRadius:4,height:8,minWidth:60}}>
+                            <div style={{background:pct>90?"#ef4444":pct>60?"#f59e0b":"#22c55e",width:`${pct}%`,height:"100%",borderRadius:4}}/>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -195,130 +191,19 @@ function Brasileirao({onBack, T, darkMode, setDarkMode}) {
           </div>
         </>)}
 
-        {/* ── JOGOS ── */}
-        {tab==="jogos" && (<>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {rodadasList.map(r=>(<button key={r} onClick={()=>setFiltroRod(r)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,background:filtroRod===r?"#22c55e":T.card,color:filtroRod===r?"#fff":T.textMd}}>{r==="Todas"?"Todas":`Rd ${r}`}</button>))}
-              <div style={{width:1,background:T.border,margin:"0 4px"}}/>
-              {["Todas","B1","B2"].map(c=>(<button key={c} onClick={()=>setFiltroCat(c)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,background:filtroCat===c?"#f59e0b":T.card,color:filtroCat===c?"#000":T.textMd}}>{c==="Todas"?"B1+B2":c}</button>))}
-              <button onClick={()=>setShowPlaceholder(p=>!p)} style={{padding:"5px 12px",borderRadius:20,border:"none",cursor:"pointer",fontSize:12,background:showPlaceholder?"#8b5cf6":T.card,color:showPlaceholder?"#fff":T.textMd}}>
-                {showPlaceholder ? "Ocultar a divulgar" : "Ver a divulgar"}
-              </button>
-            </div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              <button onClick={()=>setNovoRapido("b1")}  style={{...btnStyle,background:"#22c55e",fontSize:12}}>+ B1 Sudeste</button>
-              <button onClick={()=>setNovoRapido("b2s")} style={{...btnStyle,background:"#3b82f6",fontSize:12}}>+ B2 Sudeste</button>
-              <button onClick={()=>setNovoRapido("b2sul")} style={{...btnStyle,background:"#f59e0b",color:"#000",fontSize:12}}>+ B2 Sul</button>
-              <button onClick={()=>setNovo(true)} style={{...btnStyle,background:"#475569",fontSize:12}}>+ Personalizado</button>
-            </div>
-          </div>
-          <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
-            <div style={{padding:"10px 16px",borderBottom:`1px solid ${T.border}`,color:T.textSm,fontSize:12}}>{filtrados.length} jogos</div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:700}}>
-                <thead><tr style={{background:T.bg}}>{["Jogo","Rd","Cidade","Data","Cat.","Detentor","Orçado","Provisionado","Realizado","Saving",""].map(h=><th key={h} style={{padding:"10px 12px",textAlign:"left",color:T.textSm,fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {filtrados.map(j => {
-                    const o=subTotal(j.orcado), p=subTotal(j.provisionado), r=subTotal(j.realizado);
-                    const isDef = j.mandante==="A definir";
-                    return (
-                      <tr key={j.id} style={{borderTop:`1px solid ${T.border}`,opacity:isDef?0.45:1}}>
-                        <td style={{padding:"10px 12px",fontWeight:600,fontSize:13,whiteSpace:"nowrap",color:T.text}}>{isDef?<span style={{color:T.textSm,fontStyle:"italic"}}>A divulgar</span>:`${j.mandante} x ${j.visitante}`}</td>
-                        <td style={{padding:"10px 12px",color:T.textMd,fontSize:12}}>{j.rodada}</td>
-                        <td style={{padding:"10px 12px",color:T.textMd,fontSize:12,whiteSpace:"nowrap"}}>{j.cidade}</td>
-                        <td style={{padding:"10px 12px",color:T.textMd,fontSize:12,whiteSpace:"nowrap"}}>{j.data}</td>
-                        <td style={{padding:"10px 12px"}}><Pill label={j.categoria} color={j.categoria==="B1"?"#22c55e":"#f59e0b"}/></td>
-                        <td style={{padding:"10px 12px",fontSize:11,color:T.textMd,whiteSpace:"nowrap"}}>{j.detentor}</td>
-                        <td style={{padding:"10px 12px",fontSize:13,whiteSpace:"nowrap",color:T.text}}>{fmtK(o)}</td>
-                        <td style={{padding:"10px 12px",fontSize:13,color:"#3b82f6",whiteSpace:"nowrap"}}>{fmtK(p)}</td>
-                        <td style={{padding:"10px 12px",fontSize:13,color:"#f59e0b",whiteSpace:"nowrap"}}>{fmtK(r)}</td>
-                        <td style={{padding:"10px 12px",fontWeight:600,color:(o-p)>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmtK(o-p)}</td>
-                        <td style={{padding:"10px 12px"}}><button onClick={()=>{setMicroJogoId(j.id);setTab("micro");}} style={{...btnStyle,background:"#1d4ed8",padding:"4px 10px",fontSize:11}}>🔍</button></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>)}
-
-        {/* ── MICRO / SERVIÇOS / RELATÓRIO / APRESENTAÇÕES ── */}
-        {tab==="micro"       && <VisaoMicro      jogos={jogos} jogoId={microJogoId} onChangeJogo={setMicroJogoId} onSave={saveJogo} T={T}/>}
-        {tab==="serviços"    && <TabServicos     servicos={servicos} setServicos={setServicos} T={T}/>}
-        {tab==="relatório"   && <TabRelatorio    jogos={jogos} servicos={servicos} T={T}/>}
+        {/* ── ABAS EXTRAÍDAS ── */}
+        {tab==="jogos"        && <TabJogos         jogos={jogos} filtrados={filtrados} filtroRod={filtroRod} setFiltroRod={setFiltroRod} filtroCat={filtroCat} setFiltroCat={setFiltroCat} showPlaceholder={showPlaceholder} setShowPlaceholder={setShowPlaceholder} rodadasList={rodadasList} setMicroJogoId={setMicroJogoId} setTab={setTab} setNovo={setNovo} setNovoRapido={setNovoRapido} T={T}/>}
+        {tab==="savings"      && <TabSavings       jogosFiltered={jogosFiltered} totOrcJogos={totOrcJogos} totProvJogos={totProvJogos} filtroRod={filtroRod} setFiltroRod={setFiltroRod} filtroCat={filtroCat} setFiltroCat={setFiltroCat} rodadasList={rodadasList} T={T}/>}
+        {tab==="gráficos"     && <TabGraficos      divulgados={divulgados} savingRodada={savingRodada} RESUMO_CATS={RESUMO_CATS} T={T}/>}
+        {tab==="micro"        && <VisaoMicro       jogos={jogos} jogoId={microJogoId} onChangeJogo={setMicroJogoId} onSave={saveJogo} T={T}/>}
+        {tab==="serviços"     && <TabServicos      servicos={servicos} setServicos={setServicos} T={T}/>}
+        {tab==="relatório"    && <TabRelatorio     jogos={jogos} servicos={servicos} T={T}/>}
         {tab==="apresentações"&& <TabApresentacoes T={T}/>}
 
-        {/* ── SAVINGS ── */}
-        {tab==="savings" && (<>
-          <Filtros/>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24}}>
-            <KPI label="Saving (Orç − Prov)" value={fmt(totOrcJogos-totProvJogos)} sub={`${totOrcJogos?((totOrcJogos-totProvJogos)/totOrcJogos*100).toFixed(1):0}% do budget`} color="#22c55e" T={T}/>
-            <KPI label="% Saving" value={totOrcJogos?`${((totOrcJogos-totProvJogos)/totOrcJogos*100).toFixed(1)}%`:"—"} sub="sobre o orçado" color="#3b82f6" T={T}/>
-            <KPI label="Custo Médio / Jogo" value={jogosFiltered.length?fmt(totOrcJogos/jogosFiltered.length):"—"} sub="orçado" color="#8b5cf6" T={T}/>
-          </div>
-          <div style={{background:T.card,borderRadius:12,overflow:"hidden"}}>
-            <div style={{padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}><h3 style={{margin:0,fontSize:14,color:T.textMd}}>Saving por Jogo</h3></div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",minWidth:500}}>
-                <thead><tr style={{background:T.bg}}>{["Jogo","Rd","Cat.","Orçado","Provisionado","Saving"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",color:T.textSm,fontSize:11,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {jogosFiltered.map(j => {
-                    const o=subTotal(j.orcado), p=subTotal(j.provisionado), sv=o-p;
-                    return (
-                      <tr key={j.id} style={{borderTop:`1px solid ${T.border}`}}>
-                        <td style={{padding:"10px 14px",fontWeight:600,fontSize:13,whiteSpace:"nowrap",color:T.text}}>{j.mandante} x {j.visitante}</td>
-                        <td style={{padding:"10px 14px",color:T.textMd}}>{j.rodada}</td>
-                        <td style={{padding:"10px 14px"}}><Pill label={j.categoria} color={j.categoria==="B1"?"#22c55e":"#f59e0b"}/></td>
-                        <td style={{padding:"10px 14px",whiteSpace:"nowrap",color:T.text}}>{fmt(o)}</td>
-                        <td style={{padding:"10px 14px",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(p)}</td>
-                        <td style={{padding:"10px 14px",fontWeight:700,color:sv>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmt(sv)}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr style={{borderTop:`2px solid ${T.muted}`,background:T.bg,fontWeight:700}}>
-                    <td colSpan={3} style={{padding:"12px 14px",color:T.text}}>TOTAL</td>
-                    <td style={{padding:"12px 14px",whiteSpace:"nowrap",color:T.text}}>{fmt(totOrcJogos)}</td>
-                    <td style={{padding:"12px 14px",color:"#3b82f6",whiteSpace:"nowrap"}}>{fmt(totProvJogos)}</td>
-                    <td style={{padding:"12px 14px",fontWeight:700,color:(totOrcJogos-totProvJogos)>=0?"#22c55e":"#ef4444",whiteSpace:"nowrap"}}>{fmt(totOrcJogos-totProvJogos)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>)}
-
-        {/* ── GRÁFICOS ── */}
-        {tab==="gráficos" && (
-          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:20}}>
-            <div style={{background:T.card,borderRadius:12,padding:20}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,color:T.textMd}}>Saving por Rodada</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={savingRodada}><XAxis dataKey="name" tick={{fill:T.textMd,fontSize:11}}/><YAxis tickFormatter={fmtK} tick={{fill:T.textMd,fontSize:11}}/><Tooltip content={<CustomTooltip T={T}/>}/><Bar dataKey="Saving" fill="#22c55e" radius={[4,4,0,0]}/></BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{background:T.card,borderRadius:12,padding:20}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,color:T.textMd}}>Distribuição do Budget</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart><Pie data={RESUMO_CATS.map(c=>({name:c.nome,value:c.orcado}))} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({name,percent})=>`${name} ${(percent*100).toFixed(0)}%`} labelLine={false}>{RESUMO_CATS.map((_,i)=><Cell key={i} fill={PIE_COLORS[i%PIE_COLORS.length]}/>)}</Pie><Tooltip formatter={v=>fmt(v)}/></PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div style={{background:T.card,borderRadius:12,padding:20}}>
-              <h3 style={{margin:"0 0 16px",fontSize:14,color:T.textMd}}>Orçado por Jogo — B1 vs B2</h3>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={divulgados.map(j=>({name:`R${j.rodada} ${j.mandante.split(" ")[0]}`,valor:subTotal(j.orcado),cat:j.categoria}))}>
-                  <XAxis dataKey="name" tick={{fill:T.textMd,fontSize:9}}/><YAxis tickFormatter={fmtK} tick={{fill:T.textMd,fontSize:11}}/><Tooltip content={<CustomTooltip T={T}/>}/>
-                  <Bar dataKey="valor" radius={[4,4,0,0]}>{divulgados.map(j=><Cell key={j.id} fill={j.categoria==="B1"?"#22c55e":"#f59e0b"}/>)}</Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
       </div>
 
-      {showNovo    && <NovoJogoModal  onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
-      {novoRapido  && <NovoRapidoModal cenario={novoRapido} jogos={jogos} onSave={addJogo} onClose={()=>setNovoRapido(null)} T={T}/>}
+      {showNovo   && <NovoJogoModal    onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
+      {novoRapido && <NovoRapidoModal  cenario={novoRapido} jogos={jogos} onSave={addJogo} onClose={()=>setNovoRapido(null)} T={T}/>}
     </div>
   );
 }
