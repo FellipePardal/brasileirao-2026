@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
-import PptxGenJS from "pptxgenjs"; // ← FIX: import direto, sem depender de global
+import PptxGenJS from "pptxgenjs"; // 
 import { btnStyle, iSty, ORC_PADRAO, REAL_PADRAO } from "../../constants";
 import { parseBR, fmtNum, fmtR, fmtRs } from "../../utils";
 import { CATS_FIXOS_INIT } from "../../data";
