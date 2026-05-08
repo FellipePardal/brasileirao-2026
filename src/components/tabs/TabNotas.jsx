@@ -760,7 +760,7 @@ function NFLivemodeModal({ jogos, fornecedores, onSave, onClose, T }) {
 }
 
 // ─── RECEBIDAS (submissões do formulário externo) ────────────────────────────
-function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico' }) {
+function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
   const [submissions, setSubmissions] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -873,7 +873,7 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
       {viewTab === "pendentes" && submissions.length === 0 && (
         <div style={{background:T.card,borderRadius:12,padding:40,textAlign:"center"}}>
           <p style={{color:T.textSm,fontSize:13,margin:0}}>Nenhuma NF recebida pelo formulário externo</p>
-          <p style={{color:T.textSm,fontSize:11,margin:"8px 0 0"}}>Link do formulário: <code style={{color:"#22c55e"}}>{window.location.origin}/#formulario</code></p>
+          <p style={{color:T.textSm,fontSize:11,margin:"8px 0 0"}}>Link do formulário: <code style={{color:"#22c55e"}}>{window.location.origin}/{formHash}</code></p>
         </div>
       )}
       {viewTab === "pendentes" && submissions.map(sub => {
@@ -1028,7 +1028,7 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico' }) {
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
   const { portal } = usePortalLink('brasileirao');
 
   // Sincroniza fornecedoresJogo com o Portal (matriz). Converte o nome operacional do Portal
@@ -1640,7 +1640,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
 
       {/* ── RECEBIDAS (do formulário externo) ── */}
       {tab === "recebidas" && (
-        <RecebidasTab notas={notas} addNota={addNota} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey}/>
+        <RecebidasTab notas={notas} addNota={addNota} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey} formHash={formHash}/>
       )}
 
       {showRegistrar && <RegistrarNFModal jogosRodada={jogosRodada} notasExistentes={notas} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowRegistrar(null)} T={T} portal={portal}/>}
