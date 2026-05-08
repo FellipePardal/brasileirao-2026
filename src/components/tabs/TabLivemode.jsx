@@ -8,13 +8,13 @@ import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile } from "../../lib/su
 const fmt = v => (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
 
 export const SERVICOS_LM = [
-  { key:"grafismo",     label:"Máquinas de Grafismo", valorPadrao:1974 },
-  { key:"starlink",     label:"Starlink",             valorPadrao:329  },
-  { key:"downlink",     label:"Downlink",             valorPadrao:1500 },
-  { key:"distribuicao", label:"Distribuição",         valorPadrao:1000 },
+  { key:"grafismo",     orcadoKey:"maquinas",    label:"Máquinas de Grafismo", valorPadrao:1974 },
+  { key:"starlink",     orcadoKey:"starlink",    label:"Starlink",             valorPadrao:329  },
+  { key:"downlink",     orcadoKey:"downlink",    label:"Downlink",             valorPadrao:1500 },
+  { key:"distribuicao", orcadoKey:"distribuicao",label:"Distribuição",         valorPadrao:1000 },
 ];
 
-const VALOR_PADRAO_JOGO = SERVICOS_LM.reduce((s, x) => s + x.valorPadrao, 0); // 4803/jogo
+const lmOrcado = (j) => (j.orcado?.downlink||0) + (j.orcado?.distribuicao||0) + (j.orcado?.maquinas||0);
 
 function abreviar(nome) {
   if (!nome || nome === "A definir") return "TBD";
@@ -263,14 +263,13 @@ export default function TabLivemode({ livemode, setLivemode, notasLivemode, setN
     return map;
   }, [nfs]);
 
-  // ── Orçado por jogo (fixo) ──
-  const orcadoPorJogo = VALOR_PADRAO_JOGO;
-  const totalOrcado = divulgados.length * orcadoPorJogo;
+  // ── Orçado por jogo (por game orcado) ──
+  const totalOrcado = divulgados.reduce((s,j) => s + lmOrcado(j), 0);
 
   // Totais por serviço
   const totaisPorServico = SERVICOS_LM.map(s => ({
     ...s,
-    total: divulgados.length * s.valorPadrao,
+    total: divulgados.reduce((sum,j) => sum + (j.orcado?.[s.orcadoKey]||0), 0),
     realizado: nfs.reduce((sum,n) => {
       const ids = n.jogosIds || [];
       return sum + (n.servicos?.[s.key] || 0) * ids.length;
@@ -402,13 +401,14 @@ export default function TabLivemode({ livemode, setLivemode, notasLivemode, setN
               <tbody>
                 {divulgados.map(j => {
                   const real = realizadoPorJogo[j.id] || 0;
-                  const saldo = orcadoPorJogo - real;
+                  const jogoOrcado = lmOrcado(j);
+                  const saldo = jogoOrcado - real;
                   const temNF = jogosComNF.has(j.id);
                   return (
                     <tr key={j.id} style={{...TS.tr, background:temNF ? green+"08" : "transparent"}}>
                       <td className="num" style={{...TS.td, fontWeight:700, fontSize:12}}>Rd {j.rodada}</td>
                       <td style={{...TS.td, fontSize:12, whiteSpace:"nowrap"}}>{j.mandante} x {j.visitante}</td>
-                      <td className="num" style={{...TS.tdNum, color:purple}}>{fmt(orcadoPorJogo)}</td>
+                      <td className="num" style={{...TS.tdNum, color:purple}}>{fmt(jogoOrcado)}</td>
                       <td className="num" style={{...TS.tdNum, color:real>0?green:T.textSm}}>{fmt(real)}</td>
                       <td className="num" style={{...TS.tdNum, fontWeight:700, color:saldo<0?T.danger:teal}}>{fmt(saldo)}</td>
                       <td style={TS.td}>
