@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Pill } from "./shared";
 import { getState, setState, fileToDataUrl, saveNFFile } from "../lib/supabase";
-
-const SUBS_EXCLUIR = new Set(["transporte","uber","hospedagem","seg_espacial","infra"]);
 const T = {
   bg:"#060912", card:"#0f1623", border:"#1e293b", muted:"#334155",
   text:"#f8fafc", textMd:"#cbd5e1", textSm:"#94a3b8",
@@ -15,46 +12,17 @@ const IS = { background:T.surfaceAlt, border:`1px solid ${T.border}`, borderRadi
 const fmt = v => (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
 const HIDE_SPINNERS = `input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input[type=number]{-moz-appearance:textfield}`;
 
-const CATS_PAULISTAO = [
-  { key:"operacoes", label:"Operações", color:"#3b82f6", subs:[
-    { key:"um_b3", label:"UM B3" },
-    { key:"um_b1", label:"UM B1" },
-    { key:"downlink", label:"Downlink" },
-    { key:"distribuicao", label:"Distribuição" },
-    { key:"liveu", label:"LiveU" },
-    { key:"maquinas", label:"Máquinas" },
-    { key:"operador_tecnico", label:"Operador Técnico" },
-    { key:"coordenador", label:"Coordenador" },
-  ]},
-  { key:"producao", label:"Produção", color:"#f59e0b", subs:[
-    { key:"comentarista", label:"Comentarista" },
-    { key:"narrador", label:"Narrador" },
-    { key:"reporter", label:"Repórter" },
-    { key:"camera", label:"Câmera" },
-    { key:"auxiliar_producao", label:"Aux. Produção" },
-  ]},
-  { key:"pos_producao", label:"Pós-Produção", color:"#8b5cf6", subs:[
-    { key:"edicao", label:"Edição" },
-    { key:"grafismo", label:"Grafismo" },
-    { key:"sonoplastia", label:"Sonoplastia" },
-  ]},
+const SERVICOS_PAULISTAO = [
+  { catLabel:"Operações", catColor:"#D97706", subKey:"um_b3",      subLabel:"UM B3" },
+  { catLabel:"Pessoal",   catColor:"#2563EB", subKey:"prod_um",    subLabel:"Produtor de UM" },
+  { catLabel:"Pessoal",   catColor:"#2563EB", subKey:"prod_campo", subLabel:"Produtor de Campo" },
+  { catLabel:"Pessoal",   catColor:"#2563EB", subKey:"supervisor1",subLabel:"Supervisor 1" },
+  { catLabel:"Operações", catColor:"#D97706", subKey:"geradores",  subLabel:"Geradores" },
+  { catLabel:"Operações", catColor:"#D97706", subKey:"sng",        subLabel:"SNG" },
 ];
 
-function extrairServicos(jogo) {
-  const s = [];
-  CATS_PAULISTAO.forEach(cat => { cat.subs.forEach(sub => {
-    if (SUBS_EXCLUIR.has(sub.key)) return;
-    if ((jogo.provisionado?.[sub.key] || 0) > 0)
-      s.push({ subKey:sub.key, subLabel:sub.label, catLabel:cat.label, catColor:cat.color });
-  })});
-  // Se jogo não tem provisionado configurado, mostra todas as subs disponíveis
-  if (s.length === 0) {
-    CATS_PAULISTAO.forEach(cat => { cat.subs.forEach(sub => {
-      if (SUBS_EXCLUIR.has(sub.key)) return;
-      s.push({ subKey:sub.key, subLabel:sub.label, catLabel:cat.label, catColor:cat.color });
-    })});
-  }
-  return s;
+function extrairServicos() {
+  return SERVICOS_PAULISTAO;
 }
 
 function FornecedorInput({ value, onChange, fornecedores }) {
@@ -160,7 +128,7 @@ export default function FormularioPublicoPaulistao() {
       const servicosValores = {};
       let valorNF = 0;
       subs.forEach(sk => { const v = valores[`${jogoId}_${sk}`] || 0; servicosValores[sk] = v; valorNF += v; });
-      const allServicos = extrairServicos(jogo);
+      const allServicos = extrairServicos();
       const submissionId = Date.now() + jogoId;
       let hasFile = false;
       if (arquivo) {
@@ -276,7 +244,7 @@ export default function FormularioPublicoPaulistao() {
                           <div style={{fontWeight:700,fontSize:14,color:T.text}}>{j.mandante} x {j.visitante}</div>
                           <div style={{color:T.textSm,fontSize:12,marginTop:2}}>{j.data}{j.cidade ? ` · ${j.cidade}` : ""}</div>
                         </div>
-                        {j.grupo && <Pill label={j.grupo} color={BRAND}/>}
+                        {j.grupo && <span style={{fontSize:11,fontWeight:700,color:BRAND,background:T.brandSoft,padding:"3px 8px",borderRadius:6}}>{j.grupo}</span>}
                       </button>
                     );
                   })}
@@ -292,7 +260,7 @@ export default function FormularioPublicoPaulistao() {
                 {jogosSel.map(jogoId => {
                   const jogo = divulgados.find(j => j.id === jogoId);
                   if (!jogo) return null;
-                  const servicos = extrairServicos(jogo);
+                  const servicos = extrairServicos();
                   const selected = servicosSel[jogoId] || [];
                   const byCat = {};
                   servicos.forEach(s => { if (!byCat[s.catLabel]) byCat[s.catLabel] = {color:s.catColor,items:[]}; byCat[s.catLabel].items.push(s); });
@@ -333,7 +301,7 @@ export default function FormularioPublicoPaulistao() {
                   const jogo = divulgados.find(j => j.id === jogoId);
                   if (!jogo) return null;
                   const subs = servicosSel[jogoId] || [];
-                  const allServicos = extrairServicos(jogo);
+                  const allServicos = extrairServicos();
                   return (
                     <div key={jogoId} style={{marginBottom:20}}>
                       {jogosSel.length > 1 && (
@@ -412,7 +380,7 @@ export default function FormularioPublicoPaulistao() {
                     const jogo = divulgados.find(j => j.id === jogoId);
                     if (!jogo) return null;
                     const subs = servicosSel[jogoId] || [];
-                    const allServicos = extrairServicos(jogo);
+                    const allServicos = extrairServicos();
                     const total = subs.reduce((s, sk) => s + (valores[`${jogoId}_${sk}`] || 0), 0);
                     return (
                       <div key={jogoId} style={{marginBottom:8}}>
