@@ -14,9 +14,9 @@ const STATUS_COLOR = {"Pendente":"#f59e0b","Solicitada":"#3b82f6","Recebida":"#8
 // Append-only em nf_historico — toda criação/exclusão de NF deixa rastro
 // (independente da origem: formulário público, "Registrar NF" ou "NF Avulsa").
 // Permite reconstruir o array de notas se ele for zerado por bug ou ação manual.
-async function pushHistorico(entry) {
-  const atual = (await getState('nf_historico')) || [];
-  await setSupabaseState('nf_historico', [...atual, entry]);
+async function pushHistorico(entry, historicoKey = 'nf_historico') {
+  const atual = (await getState(historicoKey)) || [];
+  await setSupabaseState(historicoKey, [...atual, entry]);
 }
 
 function FornecedorInput({ value, onChange, fornecedores, T }) {
@@ -772,7 +772,7 @@ function RecebidasTab({ notas, addNota, jogos, T }) {
 
   const loadAll = () => {
     setLoading(true);
-    Promise.all([getState('nf_submissions'), getState('nf_historico')]).then(([s, h]) => {
+    Promise.all([getState(submissionsKey), getState(historicoKey)]).then(([s, h]) => {
       setSubmissions(s || []);
       setHistorico(h || []);
       setLoading(false);
@@ -781,7 +781,7 @@ function RecebidasTab({ notas, addNota, jogos, T }) {
 
   useEffect(() => { loadAll(); }, []);
 
-  const salvarHistorico = (next) => { setHistorico(next); setSupabaseState('nf_historico', next); };
+  const salvarHistorico = (next) => { setHistorico(next); setSupabaseState(historicoKey, next); };
 
   const startEdit = (sub) => {
     setEditingId(sub.id);
@@ -829,7 +829,7 @@ function RecebidasTab({ notas, addNota, jogos, T }) {
     salvarHistorico([...historico, {...sub, decisao:"aprovada", decidoEm: new Date().toISOString()}]);
     const next = submissions.filter(s => s.id !== sub.id);
     setSubmissions(next);
-    setSupabaseState('nf_submissions', next);
+    setSupabaseState(submissionsKey, next);
     setEditingId(null);
   };
 
@@ -839,13 +839,13 @@ function RecebidasTab({ notas, addNota, jogos, T }) {
     salvarHistorico([...historico, {...sub, decisao:"rejeitada", decidoEm: new Date().toISOString()}]);
     const next = submissions.filter(s => s.id !== id);
     setSubmissions(next);
-    setSupabaseState('nf_submissions', next);
+    setSupabaseState(submissionsKey, next);
   };
 
   const recuperar = (item) => {
     const next = [...submissions, {...item, decisao:undefined, decidoEm:undefined}];
     setSubmissions(next);
-    setSupabaseState('nf_submissions', next);
+    setSupabaseState(submissionsKey, next);
     salvarHistorico(historico.filter(h => h.id !== item.id));
   };
 
@@ -1028,7 +1028,7 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, T }) {
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico' }) {
   const { portal } = usePortalLink('brasileirao');
 
   // Sincroniza fornecedoresJogo com o Portal (matriz). Converte o nome operacional do Portal
@@ -1173,7 +1173,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
         ...nota,
         decisao: nota.tipo === "avulsa" ? "avulsa" : "registrada",
         decidoEm: new Date().toISOString(),
-      });
+      }, historicoKey);
     }
     setShowRegistrar(null);
     setShowAvulsa(false);
@@ -1204,7 +1204,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
           };
         }));
       }
-      if (nota) pushHistorico({ ...nota, decisao: "excluida", excluidoEm: new Date().toISOString() });
+      if (nota) pushHistorico({ ...nota, decisao: "excluida", excluidoEm: new Date().toISOString() }, historicoKey);
     }
   };
 
@@ -1216,7 +1216,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
     const idsRodada = new Set(nfsRodada.map(n => n.id));
     nfsRodada.forEach(n => {
       deleteNFFile(n.id);
-      pushHistorico({ ...n, decisao: "excluida", excluidoEm: agora, motivo: `limpar_rodada_${rodada}` });
+      pushHistorico({ ...n, decisao: "excluida", excluidoEm: agora, motivo: `limpar_rodada_${rodada}` }, historicoKey);
     });
     setNotas(ns => ns.filter(n => n.rodada !== rodada));
     if (setEnvios) {
