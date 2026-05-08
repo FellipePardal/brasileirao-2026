@@ -222,7 +222,7 @@ function NFLivemodeModal({ onSave, onClose, jogos, T }) {
 }
 
 // ── Componente Principal ──
-export default function TabLivemode({ livemode, setLivemode, notasLivemode, setNotasLivemode, jogos, setJogos, fornecedores, T }) {
+export default function TabLivemode({ livemode, setLivemode, notasLivemode, setNotasLivemode, jogos, setJogos, fornecedores, T, useOrcadoLivemode = false }) {
   const [tab, setTab] = useState("notas");
   const [showModal, setShowModal] = useState(false);
 
@@ -263,13 +263,16 @@ export default function TabLivemode({ livemode, setLivemode, notasLivemode, setN
     return map;
   }, [nfs]);
 
-  // ── Orçado por jogo (por game orcado) ──
-  const totalOrcado = divulgados.reduce((s,j) => s + lmOrcado(j), 0);
+  // ── Orçado por jogo ──
+  const jogoOrcadoFn = useOrcadoLivemode ? lmOrcado : () => SERVICOS_LM.reduce((s,x) => s+x.valorPadrao, 0);
+  const totalOrcado = divulgados.reduce((s,j) => s + jogoOrcadoFn(j), 0);
 
   // Totais por serviço
   const totaisPorServico = SERVICOS_LM.map(s => ({
     ...s,
-    total: divulgados.reduce((sum,j) => sum + (j.orcado?.[s.orcadoKey]||0), 0),
+    total: useOrcadoLivemode
+      ? divulgados.reduce((sum,j) => sum + (j.orcado?.[s.orcadoKey]||0), 0)
+      : divulgados.length * s.valorPadrao,
     realizado: nfs.reduce((sum,n) => {
       const ids = n.jogosIds || [];
       return sum + (n.servicos?.[s.key] || 0) * ids.length;
@@ -401,7 +404,7 @@ export default function TabLivemode({ livemode, setLivemode, notasLivemode, setN
               <tbody>
                 {divulgados.map(j => {
                   const real = realizadoPorJogo[j.id] || 0;
-                  const jogoOrcado = lmOrcado(j);
+                  const jogoOrcado = jogoOrcadoFn(j);
                   const saldo = jogoOrcado - real;
                   const temNF = jogosComNF.has(j.id);
                   return (
