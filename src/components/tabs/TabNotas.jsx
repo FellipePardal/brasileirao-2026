@@ -113,8 +113,10 @@ function extrairServicos(jogo) {
     cat.subs.forEach(sub => {
       if (SUBS_EXCLUIR.has(sub.key)) return;
       const valProv = jogo.provisionado?.[sub.key] || 0;
-      if (valProv > 0) {
-        servicos.push({ subKey: sub.key, subLabel: sub.label, catLabel: cat.label, catColor: cat.color, valorRef: valProv });
+      const valOrc  = jogo.orcado?.[sub.key] || 0;
+      const valorRef = valProv > 0 ? valProv : valOrc;
+      if (valorRef > 0) {
+        servicos.push({ subKey: sub.key, subLabel: sub.label, catLabel: cat.label, catColor: cat.color, valorRef });
       }
     });
   });
