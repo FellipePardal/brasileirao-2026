@@ -760,7 +760,7 @@ function NFLivemodeModal({ jogos, fornecedores, onSave, onClose, T }) {
 }
 
 // ─── RECEBIDAS (submissões do formulário externo) ────────────────────────────
-function RecebidasTab({ notas, addNota, jogos, T }) {
+function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico' }) {
   const [submissions, setSubmissions] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1640,7 +1640,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
 
       {/* ── RECEBIDAS (do formulário externo) ── */}
       {tab === "recebidas" && (
-        <RecebidasTab notas={notas} addNota={addNota} jogos={jogos} T={T}/>
+        <RecebidasTab notas={notas} addNota={addNota} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey}/>
       )}
 
       {showRegistrar && <RegistrarNFModal jogosRodada={jogosRodada} notasExistentes={notas} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowRegistrar(null)} T={T} portal={portal}/>}
