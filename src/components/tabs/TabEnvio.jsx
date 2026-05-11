@@ -23,6 +23,19 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const [editandoNome, setEditandoNome] = useState(false);
   const [nomeTemp, setNomeTemp] = useState("");
 
+  // Preview de NF
+  const [previewId, setPreviewId] = useState(null);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const openPreview = async (notaId) => {
+    setPreviewId(notaId);
+    setPreviewSrc(null);
+    setPreviewLoading(true);
+    const data = await getNFFile(notaId);
+    setPreviewSrc(data || null);
+    setPreviewLoading(false);
+  };
+
   // Adicionar notas a envio existente
   const [addingNotas, setAddingNotas] = useState(false);
   const [addSelJogos, setAddSelJogos] = useState(new Set());
@@ -540,7 +553,12 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
                           {STATUS_NOTA.map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td style={TS.td}>{n.hasFile && <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, n.codigo)}/>}</td>
+                      <td style={TS.td}>{n.hasFile && (
+                        <div style={{display:"flex",gap:4}}>
+                          <Button T={T} variant="secondary" size="sm" icon={Eye} onClick={()=>openPreview(n.id)}/>
+                          <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, n.codigo)}/>
+                        </div>
+                      )}</td>
                       <td style={TS.td}>
                         <Button T={T} variant="danger" size="sm" icon={X} onClick={()=>removerNotaDoEnvio(envioDetalhe.id, n.id, "jogo")}/>
                       </td>
@@ -579,7 +597,12 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
                           {STATUS_NOTA.map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td style={TS.td}>{n.hasFile && <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, `NF_${n.fornecedor}`)}/>}</td>
+                      <td style={TS.td}>{n.hasFile && (
+                        <div style={{display:"flex",gap:4}}>
+                          <Button T={T} variant="secondary" size="sm" icon={Eye} onClick={()=>openPreview(n.id)}/>
+                          <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, `NF_${n.fornecedor}`)}/>
+                        </div>
+                      )}</td>
                       <td style={TS.td}>
                         <Button T={T} variant="danger" size="sm" icon={X} onClick={()=>removerNotaDoEnvio(envioDetalhe.id, n.id, "mensal")}/>
                       </td>
@@ -617,7 +640,12 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
                           {STATUS_NOTA.map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
                       </td>
-                      <td style={TS.td}>{n.hasFile && <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, `NF_LM_${n.fornecedor}`)}/>}</td>
+                      <td style={TS.td}>{n.hasFile && (
+                        <div style={{display:"flex",gap:4}}>
+                          <Button T={T} variant="secondary" size="sm" icon={Eye} onClick={()=>openPreview(n.id)}/>
+                          <Button T={T} variant="secondary" size="sm" icon={Download} onClick={()=>downloadNF(n.id, `NF_LM_${n.fornecedor}`)}/>
+                        </div>
+                      )}</td>
                       <td style={TS.td}>
                         <Button T={T} variant="danger" size="sm" icon={X} onClick={()=>removerNotaDoEnvio(envioDetalhe.id, n.id, "livemode")}/>
                       </td>
@@ -629,6 +657,36 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
           </Card>
         )}
       </>)}
+
+      {/* ── MODAL PREVIEW NF ── */}
+      {previewId !== null && (
+        <div onClick={() => { setPreviewId(null); setPreviewSrc(null); }}
+          style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div onClick={e => e.stopPropagation()}
+            style={{background:T.card,borderRadius:16,padding:"16px 20px",maxWidth:900,width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",border:`1px solid ${T.border}`,boxShadow:"0 24px 64px rgba(0,0,0,0.6)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexShrink:0}}>
+              <span style={{color:T.text,fontWeight:700,fontSize:15}}>Visualizar Nota Fiscal</span>
+              <button onClick={() => { setPreviewId(null); setPreviewSrc(null); }}
+                style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:6,padding:"6px 8px",cursor:"pointer",color:T.textSm,display:"flex",alignItems:"center"}}>
+                <X size={16}/>
+              </button>
+            </div>
+            <div style={{flex:1,minHeight:0,overflow:"auto",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {previewLoading ? (
+                <p style={{color:T.textMd,fontSize:14}}>Carregando arquivo...</p>
+              ) : previewSrc ? (
+                previewSrc.startsWith("data:application/pdf") ? (
+                  <iframe src={previewSrc} style={{width:"100%",height:"75vh",border:"none",borderRadius:8}}/>
+                ) : (
+                  <img src={previewSrc} alt="NF" style={{maxWidth:"100%",maxHeight:"75vh",objectFit:"contain",borderRadius:8}}/>
+                )
+              ) : (
+                <p style={{color:T.textMd,fontSize:14}}>Arquivo não encontrado.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

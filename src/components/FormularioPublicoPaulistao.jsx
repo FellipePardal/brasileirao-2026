@@ -1,15 +1,22 @@
 import { useState, useRef, useEffect } from "react";
+import { Sun, Moon } from "lucide-react";
 import { getState, setState, fileToDataUrl, saveNFFile } from "../lib/supabase";
 
-const T = {
+const DARK_T = {
   bg:"#060912", card:"#0f1623", border:"#1e293b", muted:"#334155",
   text:"#f8fafc", textMd:"#cbd5e1", textSm:"#94a3b8",
   surface:"#0f1623", surfaceAlt:"#0a0f1a",
   brand:"#65B32E", brandSoft:"rgba(101,179,46,0.14)", brandBorder:"rgba(101,179,46,0.32)",
 };
+const LIGHT_T = {
+  bg:"#F2F3F5", card:"#FFFFFF", border:"rgba(0,0,0,0.08)", muted:"#E5E7EB",
+  text:"#1A1A1A", textMd:"#6B7280", textSm:"#9CA3AF",
+  surface:"#FFFFFF", surfaceAlt:"#F8F9FA",
+  brand:"#65B32E", brandSoft:"rgba(101,179,46,0.10)", brandBorder:"rgba(101,179,46,0.30)",
+};
 const BRAND = "#65B32E";
 const btnS = { color:"#fff", border:"none", borderRadius:10, padding:"13px 20px", cursor:"pointer", fontWeight:700, fontSize:14, width:"100%", letterSpacing:"-0.005em" };
-const IS = { background:T.surfaceAlt, border:`1px solid ${T.border}`, borderRadius:10, color:T.text, padding:"12px 14px", fontSize:14, width:"100%", boxSizing:"border-box", MozAppearance:"textfield", fontFamily:"'Poppins',sans-serif" };
+const getIS = T => ({ background:T.surfaceAlt, border:`1px solid ${T.border}`, borderRadius:10, color:T.text, padding:"12px 14px", fontSize:14, width:"100%", boxSizing:"border-box", MozAppearance:"textfield", fontFamily:"'Poppins',sans-serif" });
 const fmt = v => (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});
 const HIDE_SPINNERS = `input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}input[type=number]{-moz-appearance:textfield}`;
 
@@ -38,8 +45,9 @@ const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Ag
 const STEPS_JOGO    = ["Fase/Rodada","Jogos","Serviços","Valores","Nota Fiscal"];
 const STEPS_MENSAL  = ["Mês","Serviço","Valores","Nota Fiscal"];
 
-function FornecedorInput({ value, onChange, fornecedores }) {
+function FornecedorInput({ value, onChange, fornecedores, T }) {
   const [open, setOpen] = useState(false);
+  const IS = getIS(T);
   const q = value.toLowerCase();
   const filtered = q.length > 0
     ? fornecedores.filter(f => f.apelido.toLowerCase().includes(q) || f.razaoSocial.toLowerCase().includes(q) || f.funcao?.toLowerCase().includes(q)).slice(0,6) : [];
@@ -49,7 +57,7 @@ function FornecedorInput({ value, onChange, fornecedores }) {
         onFocus={() => setOpen(true)} onBlur={() => setTimeout(() => setOpen(false), 200)}
         placeholder="Digite seu nome ou empresa..." style={IS}/>
       {open && filtered.length > 0 && (
-        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:50,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,marginTop:4,maxHeight:240,overflowY:"auto",boxShadow:"0 12px 32px rgba(0,0,0,0.5)"}}>
+        <div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:50,background:T.card,border:`1px solid ${T.border}`,borderRadius:10,marginTop:4,maxHeight:240,overflowY:"auto",boxShadow:"0 12px 32px rgba(0,0,0,0.3)"}}>
           {filtered.map(f => (
             <div key={f.id} onMouseDown={() => { onChange(f.apelido); setOpen(false); }}
               style={{padding:"12px 16px",cursor:"pointer",borderBottom:`1px solid ${T.border}`}}
@@ -65,14 +73,15 @@ function FornecedorInput({ value, onChange, fornecedores }) {
   );
 }
 
-function NFDataStep({ nfData, setNfData, arquivo, setArquivo, fileRef, fornecedores, resumo }) {
+function NFDataStep({ nfData, setNfData, arquivo, setArquivo, fileRef, fornecedores, resumo, T }) {
+  const IS = getIS(T);
   return (
     <div>
       <h3 style={{color:T.text,margin:"0 0 4px",fontSize:16}}>Dados da Nota Fiscal</h3>
       <p style={{color:T.textSm,fontSize:12,margin:"0 0 16px"}}>Preencha os dados e anexe o arquivo</p>
       <div style={{marginBottom:14}}>
         <label style={{color:T.textMd,fontSize:12,display:"block",marginBottom:4}}>Fornecedor / Razão Social</label>
-        <FornecedorInput value={nfData.fornecedor} onChange={v => setNfData(d => ({...d, fornecedor:v}))} fornecedores={fornecedores}/>
+        <FornecedorInput value={nfData.fornecedor} onChange={v => setNfData(d => ({...d, fornecedor:v}))} fornecedores={fornecedores} T={T}/>
       </div>
       <div style={{marginBottom:14}}>
         <label style={{color:T.textMd,fontSize:12,display:"block",marginBottom:4}}>Nº da Nota Fiscal</label>
@@ -110,7 +119,8 @@ function NFDataStep({ nfData, setNfData, arquivo, setArquivo, fileRef, fornecedo
 }
 
 // ── Formulário por JOGO ────────────────────────────────────────────────────────
-function FormJogo({ divulgados, fornecedores, onDone }) {
+function FormJogo({ divulgados, fornecedores, onDone, T }) {
+  const IS = getIS(T);
   const [step, setStep] = useState(0);
   const [rodadaSel, setRodadaSel] = useState(null);
   const [qtdJogos, setQtdJogos] = useState(1);
@@ -330,7 +340,7 @@ function FormJogo({ divulgados, fornecedores, onDone }) {
         )}
 
         {step === 4 && (
-          <NFDataStep nfData={nfData} setNfData={setNfData} arquivo={arquivo} setArquivo={setArquivo} fileRef={fileRef} fornecedores={fornecedores}
+          <NFDataStep nfData={nfData} setNfData={setNfData} arquivo={arquivo} setArquivo={setArquivo} fileRef={fileRef} fornecedores={fornecedores} T={T}
             resumo={
               <div style={{background:T.bg,borderRadius:10,padding:"14px 16px"}}>
                 <p style={{color:T.textMd,fontSize:11,fontWeight:600,margin:"0 0 8px"}}>Resumo</p>
@@ -369,7 +379,8 @@ function FormJogo({ divulgados, fornecedores, onDone }) {
 }
 
 // ── Formulário MENSAL ──────────────────────────────────────────────────────────
-function FormMensal({ fornecedores, onDone }) {
+function FormMensal({ fornecedores, onDone, T }) {
+  const IS = getIS(T);
   const [step, setStep] = useState(0);
   const [mesSel, setMesSel] = useState(new Date().getMonth());
   const [servicoSel, setServicoSel] = useState(null);
@@ -486,7 +497,7 @@ function FormMensal({ fornecedores, onDone }) {
         )}
 
         {step === 3 && (
-          <NFDataStep nfData={nfData} setNfData={setNfData} arquivo={arquivo} setArquivo={setArquivo} fileRef={fileRef} fornecedores={fornecedores}
+          <NFDataStep nfData={nfData} setNfData={setNfData} arquivo={arquivo} setArquivo={setArquivo} fileRef={fileRef} fornecedores={fornecedores} T={T}
             resumo={
               <div style={{background:T.bg,borderRadius:10,padding:"14px 16px"}}>
                 <p style={{color:T.textMd,fontSize:11,fontWeight:600,margin:"0 0 8px"}}>Resumo</p>
@@ -512,6 +523,15 @@ function FormMensal({ fornecedores, onDone }) {
 
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function FormularioPublicoPaulistao() {
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem("ffu_darkmode_v1") !== "false"; } catch { return true; }
+  });
+  const T = darkMode ? DARK_T : LIGHT_T;
+  const toggleDark = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    try { localStorage.setItem("ffu_darkmode_v1", String(next)); } catch {}
+  };
   const [jogos, setJogos] = useState([]);
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -540,12 +560,18 @@ export default function FormularioPublicoPaulistao() {
     <div style={{minHeight:"100vh",background:T.bg,fontFamily:"'Poppins',sans-serif"}}>
       <style>{HIDE_SPINNERS}</style>
       {/* Header */}
-      <div style={{background:"linear-gradient(135deg,#060912 0%,#0f1623 60%,#0a1a0f 100%)",borderBottom:`1px solid ${T.border}`,padding:"24px 16px",position:"relative",overflow:"hidden"}}>
+      <div style={{background:darkMode?"linear-gradient(135deg,#060912 0%,#0f1623 60%,#0a1a0f 100%)":"linear-gradient(135deg,#ffffff 0%,#f8f9fa 100%)",borderBottom:`1px solid ${T.border}`,padding:"24px 16px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-60,right:-60,width:200,height:200,borderRadius:"50%",background:`radial-gradient(circle, ${BRAND}1f 0%, transparent 60%)`,pointerEvents:"none"}}/>
-        <div style={{maxWidth:560,margin:"0 auto",position:"relative"}}>
-          <p style={{color:BRAND,fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",margin:"0 0 6px",fontWeight:700}}>Livemode · Transmissões</p>
-          <h1 style={{fontSize:22,fontWeight:800,margin:0,color:"#fff",letterSpacing:"-0.025em"}}>Envio de Nota Fiscal</h1>
-          <p style={{color:T.textMd,fontSize:12,margin:"4px 0 0"}}>Paulistão F 2026</p>
+        <div style={{maxWidth:560,margin:"0 auto",position:"relative",display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <p style={{color:BRAND,fontSize:10,letterSpacing:"0.18em",textTransform:"uppercase",margin:"0 0 6px",fontWeight:700}}>Livemode · Transmissões</p>
+            <h1 style={{fontSize:22,fontWeight:800,margin:0,color:T.text,letterSpacing:"-0.025em"}}>Envio de Nota Fiscal</h1>
+            <p style={{color:T.textMd,fontSize:12,margin:"4px 0 0"}}>Paulistão F 2026</p>
+          </div>
+          <button onClick={toggleDark} title={darkMode?"Modo claro":"Modo escuro"}
+            style={{background:"transparent",border:`1px solid ${T.border}`,borderRadius:8,padding:"8px",cursor:"pointer",color:T.textMd,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:4}}>
+            {darkMode ? <Sun size={16}/> : <Moon size={16}/>}
+          </button>
         </div>
       </div>
 
@@ -591,9 +617,9 @@ export default function FormularioPublicoPaulistao() {
           </div>
 
         ) : tipo === "jogo" ? (
-          <FormJogo divulgados={divulgados} fornecedores={fornecedores} onDone={() => setDone(true)}/>
+          <FormJogo divulgados={divulgados} fornecedores={fornecedores} onDone={() => setDone(true)} T={T}/>
         ) : (
-          <FormMensal fornecedores={fornecedores} onDone={() => setDone(true)}/>
+          <FormMensal fornecedores={fornecedores} onDone={() => setDone(true)} T={T}/>
         )}
 
         {tipo && !done && (
