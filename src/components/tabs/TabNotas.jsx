@@ -769,6 +769,18 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
   const [editingId, setEditingId] = useState(null);
   const [editServicos, setEditServicos] = useState({});
   const [viewTab, setViewTab] = useState("pendentes"); // "pendentes" | "historico"
+  const [previewSub, setPreviewSub] = useState(null);
+  const [previewSrc, setPreviewSrc] = useState(null);
+  const [previewLoadingNF, setPreviewLoadingNF] = useState(false);
+
+  const openPreviewSub = async (sub) => {
+    setPreviewSub(sub);
+    setPreviewSrc(null);
+    setPreviewLoadingNF(true);
+    const data = await getNFFile(sub.id);
+    setPreviewSrc(data || null);
+    setPreviewLoadingNF(false);
+  };
 
   const divulgados = jogos.filter(j => j.mandante !== "A definir");
 
@@ -933,7 +945,8 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
               {sub.hasFile && <Pill label="Arquivo anexo" color="#22c55e"/>}
               <span style={{color:T.textSm}}>Enviado: {new Date(sub.enviadoEm).toLocaleDateString("pt-BR")}</span>
             </div>
-            <div style={{display:"flex",gap:8}}>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {sub.hasFile && <button onClick={() => openPreviewSub(sub)} style={{...btnStyle,background:"#0ea5e9",padding:"6px 20px",fontSize:12}}>Ver NF</button>}
               {!isEditing && <button onClick={() => startEdit(sub)} style={{...btnStyle,background:"#3b82f6",padding:"6px 20px",fontSize:12}}>Editar</button>}
               {isEditing && <button onClick={() => setEditingId(null)} style={{...btnStyle,background:"#475569",padding:"6px 20px",fontSize:12}}>Cancelar</button>}
               <button onClick={() => aprovar(sub)} style={{...btnStyle,background:"#22c55e",padding:"6px 20px",fontSize:12}}>Aprovar</button>
@@ -969,13 +982,52 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
                 {item.decidoEm && <span>{item.decisao==="aprovada"?"Aprovada":"Rejeitada"} em {new Date(item.decidoEm).toLocaleDateString("pt-BR")}</span>}
                 {item.enviadoEm && <span>Enviada em {new Date(item.enviadoEm).toLocaleDateString("pt-BR")}</span>}
               </div>
-              <div style={{display:"flex",gap:8}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {item.hasFile && <button onClick={() => openPreviewSub(item)} style={{...btnStyle,background:"#0ea5e9",padding:"5px 16px",fontSize:11}}>Ver NF</button>}
                 <button onClick={() => recuperar(item)} style={{...btnStyle,background:"#3b82f6",padding:"5px 16px",fontSize:11}}>Recuperar</button>
                 <button onClick={() => excluirDefinitivo(item.id)} style={{...btnStyle,background:"#7f1d1d",padding:"5px 16px",fontSize:11}}>Excluir</button>
               </div>
             </div>
           ))}
         </>
+      )}
+
+      {/* ── MODAL PREVIEW NF RECEBIDA ── */}
+      {previewSub && (
+        <div style={{position:"fixed",inset:0,background:"#000000dd",zIndex:200,display:"flex",flexDirection:"column"}}
+          onClick={() => { setPreviewSub(null); setPreviewSrc(null); }}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 20px",flexShrink:0}}
+            onClick={e => e.stopPropagation()}>
+            <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <span style={{color:"#fff",fontWeight:700,fontSize:14}}>{previewSub.fornecedor}</span>
+              <span style={{color:"#8b5cf6",fontWeight:600,fontSize:13}}>{fmt(previewSub.valorNF || Object.values(previewSub.servicosValores||{}).reduce((s,v)=>s+(v||0),0))}</span>
+              {previewSub.jogoLabel && <span style={{color:"#94a3b8",fontSize:12}}>{previewSub.jogoLabel}{previewSub.rodada ? ` · Rd ${previewSub.rodada}` : ""}</span>}
+              {previewSub.mesLabel && <span style={{color:"#94a3b8",fontSize:12}}>{previewSub.mesLabel}{previewSub.servicoNome ? ` · ${previewSub.servicoNome}` : ""}</span>}
+              {previewSub.numeroNF && <span style={{color:"#94a3b8",fontSize:12}}>NF {previewSub.numeroNF}</span>}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              {previewSrc && <a href={previewSrc} download={`NF_${previewSub.fornecedor}`} style={{...btnStyle,background:"#3b82f6",padding:"6px 14px",fontSize:12,textDecoration:"none"}}>Download</a>}
+              <button onClick={() => { setPreviewSub(null); setPreviewSrc(null); }} style={{...btnStyle,background:"#475569",padding:"6px 14px",fontSize:12}}>Fechar</button>
+            </div>
+          </div>
+          <div style={{flex:1,padding:"0 20px 20px",minHeight:0}} onClick={e => e.stopPropagation()}>
+            {previewLoadingNF ? (
+              <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <p style={{color:"#94a3b8",fontSize:16}}>Carregando...</p>
+              </div>
+            ) : !previewSrc ? (
+              <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <p style={{color:"#94a3b8",fontSize:16}}>Arquivo não encontrado</p>
+              </div>
+            ) : previewSrc.startsWith("data:application/pdf") ? (
+              <iframe src={previewSrc} style={{width:"100%",height:"100%",border:"none",borderRadius:12,background:"#fff"}}/>
+            ) : (
+              <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",overflow:"auto"}}>
+                <img src={previewSrc} alt="NF" style={{maxWidth:"100%",maxHeight:"100%",borderRadius:12,objectFit:"contain"}}/>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
