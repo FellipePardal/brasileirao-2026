@@ -1197,13 +1197,13 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
   const allServicos = useMemo(() => {
     return divulgados.flatMap(jogo => {
       const servicos = extrairServicos(jogo);
-      return servicos.map(s => {
-        const key = `${jogo.id}_${s.subKey}`;
-        const nota = notas.find(n => n.servicosKeys?.includes(key));
-        const forn = fornecedoresJogo[key] || "";
-        const isento = forn && !emiteNF(forn);
-        return { key, rodada: jogo.rodada, status: nota ? "Conferida" : isento ? "Isento" : "Pendente" };
-      });
+      return servicos
+        .filter(s => { const forn = fornecedoresJogo[`${jogo.id}_${s.subKey}`] || ""; return !forn || emiteNF(forn); })
+        .map(s => {
+          const key = `${jogo.id}_${s.subKey}`;
+          const nota = notas.find(n => n.servicosKeys?.includes(key));
+          return { key, rodada: jogo.rodada, status: nota ? "Conferida" : "Pendente" };
+        });
     });
   }, [divulgados, notas, fornecedoresJogo]);
 
@@ -1438,19 +1438,15 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
               });
             });
           }
-          const servicos = [...baseFinal, ...portalExtras];
+          const servicosRaw = [...baseFinal, ...portalExtras];
+          const servicos = servicosRaw.filter(s => { const forn = fornecedoresJogo[`${jogo.id}_${s.subKey}`] || ""; return !forn || emiteNF(forn); });
           const nfsDoJogo = notas.filter(n =>
             n.servicosKeys?.some(k => k.startsWith(`${jogo.id}_`))
             || (n.tipo === "avulsa" && n.jogoId === jogo.id)
             || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
-          const pendentes = servicos.filter(s => {
-            const key = `${jogo.id}_${s.subKey}`;
-            if (servicosComNF.has(key)) return false;
-            const forn = fornecedoresJogo[key] || "";
-            return !forn || emiteNF(forn);
-          }).length;
+          const pendentes = servicos.filter(s => !servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
           const conferidas = servicos.filter(s => servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
           const accentJogo = jogo.categoria==="B1"?T.brand:T.warning;
 
@@ -1491,10 +1487,8 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                       const hasNotas = notasDestaLinha.length > 0;
                       const diff = hasNotas ? valorUnit - s.valorRef : null;
                       const restante = s.valorRef - valorUnit;
-                      const fornKey = fornecedoresJogo[key] || "";
-                      const isento = !hasNotas && fornKey && !emiteNF(fornKey);
-                      const statusLabel = hasNotas ? (isMulti && restante > 0.01 ? "Parcial" : "Conferida") : isento ? "Isento" : "Pendente";
-                      const statusColor = hasNotas ? (statusLabel === "Parcial" ? T.info : T.brand) : isento ? T.textSm : T.warning;
+                      const statusLabel = !hasNotas ? "Pendente" : (isMulti && restante > 0.01 ? "Parcial" : "Conferida");
+                      const statusColor = !hasNotas ? T.warning : (statusLabel === "Parcial" ? T.info : T.brand);
                       const nota = notasDestaLinha[0];
                       return (
                         <tr key={s.subKey} style={TS.tr}>
