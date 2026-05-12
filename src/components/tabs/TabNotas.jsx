@@ -1198,7 +1198,13 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
     return divulgados.flatMap(jogo => {
       const servicos = extrairServicos(jogo);
       return servicos
-        .filter(s => { const forn = fornecedoresJogo[`${jogo.id}_${s.subKey}`] || ""; return !forn || emiteNF(forn); })
+        .filter(s => {
+          const key = `${jogo.id}_${s.subKey}`;
+          const hasNF = notas.some(n => n.servicosKeys?.includes(key));
+          if (hasNF) return true;
+          const forn = fornecedoresJogo[key] || "";
+          return !forn || emiteNF(forn);
+        })
         .map(s => {
           const key = `${jogo.id}_${s.subKey}`;
           const nota = notas.find(n => n.servicosKeys?.includes(key));
@@ -1439,13 +1445,19 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             });
           }
           const servicosRaw = [...baseFinal, ...portalExtras];
-          const servicos = servicosRaw.filter(s => { const forn = fornecedoresJogo[`${jogo.id}_${s.subKey}`] || ""; return !forn || emiteNF(forn); });
           const nfsDoJogo = notas.filter(n =>
             n.servicosKeys?.some(k => k.startsWith(`${jogo.id}_`))
             || (n.tipo === "avulsa" && n.jogoId === jogo.id)
             || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
+          // Oculta serviços de prestadores internos SÓ SE não houver NF cadastrada para a linha
+          const servicos = servicosRaw.filter(s => {
+            const key = `${jogo.id}_${s.subKey}`;
+            if (servicosComNF.has(key)) return true;
+            const forn = fornecedoresJogo[key] || "";
+            return !forn || emiteNF(forn);
+          });
           const pendentes = servicos.filter(s => !servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
           const conferidas = servicos.filter(s => servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
           const accentJogo = jogo.categoria==="B1"?T.brand:T.warning;
