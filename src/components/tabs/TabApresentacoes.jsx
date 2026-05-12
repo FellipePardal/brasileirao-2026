@@ -3,7 +3,7 @@ import PptxGenJS from "pptxgenjs";
 import { btnStyle, iSty, ORC_PADRAO, REAL_PADRAO, RADIUS } from "../../constants";
 import { parseBR, fmtNum, fmtR, fmtRs, subTotal } from "../../utils";
 import { Card, Button } from "../ui";
-import { BarChart3, Lock, ArrowRight, ArrowLeft, FileDown, LayoutGrid } from "lucide-react";
+import { BarChart3, Lock, ArrowRight, ArrowLeft, FileDown, LayoutGrid, ChevronDown, ChevronRight } from "lucide-react";
 
 const fmtBRL = v => "R$ " + Number(v).toLocaleString("pt-BR", {minimumFractionDigits:2, maximumFractionDigits:2});
 
@@ -640,6 +640,9 @@ useEffect(() => {
 const canvasRef = useRef(null);
 useDonut(canvasRef, nfRecV, nfPend);
 
+const [expandedSecs, setExpandedSecs] = useState({});
+const toggleSec = secao => setExpandedSecs(prev => ({...prev, [secao]: !prev[secao]}));
+
 const orcTotalFmt = fmtNum(orcTotal);
 const IS    = {...iSty(T), width:"100%"};
 const IS_RO = {...IS, background:T.bg, cursor:"default"};
@@ -894,10 +897,20 @@ return (
             const sav      = orcVal - provVal;
             const debug    = computed.sections.find(x => x.secao === s.secao)?.itensDebug || [];
             const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+            const expanded = !!expandedSecs[s.secao];
             return (
               <>
               <tr key={s.secao} style={{borderBottom:`1px solid ${T.border}`}}>
-                <td style={{padding:"6px 12px",fontWeight:700,color:"#3b82f6",fontSize:13}}>{s.secao}</td>
+                <td style={{padding:"6px 12px",fontWeight:700,color:"#3b82f6",fontSize:13}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    {debug.length > 0 && (
+                      <button onClick={()=>toggleSec(s.secao)} style={{background:"none",border:"none",cursor:"pointer",padding:0,color:T.textSm,display:"flex",alignItems:"center"}}>
+                        {expanded ? <ChevronDown size={14}/> : <ChevronRight size={14}/>}
+                      </button>
+                    )}
+                    {s.secao}
+                  </div>
+                </td>
                 <td style={{padding:"4px 12px",textAlign:"right"}}>
                   <input value={s.orc} onChange={e=>setSecField(s.secao,"orc",e.target.value)}
                     style={{...iSty(T),width:130,textAlign:"right",padding:"4px 8px"}}/>
@@ -912,7 +925,7 @@ return (
                 </td>
                 <td style={{padding:"6px 12px",textAlign:"right",fontWeight:700,color:sav>=0?"#a3e635":"#ef4444"}}>{sav>=0?"▲ ":"▼ "}{fmtR(Math.abs(sav))}</td>
               </tr>
-              {debug.length > 0 && (
+              {debug.length > 0 && expanded && (
                 <tr key={s.secao+"_debug"} style={{background:T.bg}}>
                   <td colSpan={5} style={{padding:"6px 12px 10px 24px"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
