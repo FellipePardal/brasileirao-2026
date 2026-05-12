@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import PptxGenJS from "pptxgenjs";
 import { btnStyle, iSty, ORC_PADRAO, REAL_PADRAO, RADIUS } from "../../constants";
 import { parseBR, fmtNum, fmtR, fmtRs, subTotal } from "../../utils";
@@ -899,8 +899,8 @@ return (
             const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
             const expanded = !!expandedSecs[s.secao];
             return (
-              <>
-              <tr key={s.secao} style={{borderBottom:`1px solid ${T.border}`}}>
+              <Fragment key={s.secao}>
+              <tr style={{borderBottom:`1px solid ${T.border}`}}>
                 <td style={{padding:"6px 12px",fontWeight:700,color:"#3b82f6",fontSize:13}}>
                   <div style={{display:"flex",alignItems:"center",gap:6}}>
                     {debug.length > 0 && (
@@ -926,7 +926,7 @@ return (
                 <td style={{padding:"6px 12px",textAlign:"right",fontWeight:700,color:sav>=0?"#a3e635":"#ef4444"}}>{sav>=0?"▲ ":"▼ "}{fmtR(Math.abs(sav))}</td>
               </tr>
               {debug.length > 0 && expanded && (
-                <tr key={s.secao+"_debug"} style={{background:T.bg}}>
+                <tr style={{background:T.bg}}>
                   <td colSpan={5} style={{padding:"6px 12px 10px 24px"}}>
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                       <thead><tr>
@@ -950,7 +950,7 @@ return (
                   </td>
                 </tr>
               )}
-              </>
+              </Fragment>
             );
           })}
           {sectionsView.length === 0 && (
