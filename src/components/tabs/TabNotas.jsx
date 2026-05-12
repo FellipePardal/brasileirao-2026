@@ -1449,6 +1449,23 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
+
+          // Garante linha para qualquer servicoKey de NF existente que não esteja em servicosRaw
+          // (ex: sng_host registrado quando Portal estava ativo, mas agora Portal não carregou)
+          const rawKeys = new Set(servicosRaw.map(s => `${jogo.id}_${s.subKey}`));
+          nfsDoJogo.forEach(n => {
+            (n.servicosKeys || []).forEach(k => {
+              if (!k.startsWith(`${jogo.id}_`) || rawKeys.has(k)) return;
+              const subKey = k.slice(String(jogo.id).length + 1);
+              let subLabel = subKey, catLabel = '', catColor = '';
+              CATS.forEach(cat => cat.subs.forEach(sub => {
+                if (sub.key === subKey) { subLabel = sub.label; catLabel = cat.label; catColor = cat.color; }
+              }));
+              servicosRaw.push({ subKey, subLabel, catLabel, catColor, valorRef: 0, fromNF: true });
+              rawKeys.add(k);
+            });
+          });
+
           // Oculta serviços de prestadores internos SÓ SE não houver NF cadastrada para a linha
           const servicos = servicosRaw.filter(s => {
             const key = `${jogo.id}_${s.subKey}`;
