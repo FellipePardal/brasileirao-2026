@@ -762,7 +762,7 @@ function NFLivemodeModal({ jogos, fornecedores, onSave, onClose, T }) {
 }
 
 // ─── RECEBIDAS (submissões do formulário externo) ────────────────────────────
-function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
+function RecebidasTab({ notas, addNota, addNotaMensal, jogos, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
   const [submissions, setSubmissions] = useState([]);
   const [historico, setHistorico] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -828,9 +828,12 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
         ...sub,
         valorNF,
         valor: valorNF,
+        categoria: sub.servicoNome || sub.servicosLabels?.[0] || "",
         status: "Conferida",
         codigo: `MENSAL_${(sub.mesLabel||"").replace(/\s/g,"")}_${Math.round(valorNF)}_NF${nfNum}`,
       };
+      if (addNotaMensal) addNotaMensal(nota);
+      else addNota(nota);
     } else {
       const sv = editingId === sub.id ? editServicos : (sub.servicosValores || {});
       valorNF = Object.values(sv).reduce((s, v) => s + (v || 0), 0);
@@ -853,8 +856,8 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
         status: "Conferida",
         codigo: gerarCodigo(sub.rodada, mandante, visitante, valorNF, sub.numeroNF),
       };
+      addNota(nota);
     }
-    addNota(nota);
     salvarHistorico([...historico, {...sub, decisao:"aprovada", decidoEm: new Date().toISOString()}]);
     const next = submissions.filter(s => s.id !== sub.id);
     setSubmissions(next);
@@ -1112,7 +1115,7 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
   const { portal } = usePortalLink('brasileirao');
 
   // Sincroniza fornecedoresJogo com o Portal (matriz). Converte o nome operacional do Portal
@@ -1724,7 +1727,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
 
       {/* ── RECEBIDAS (do formulário externo) ── */}
       {tab === "recebidas" && (
-        <RecebidasTab notas={notas} addNota={addNota} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey} formHash={formHash}/>
+        <RecebidasTab notas={notas} addNota={addNota} addNotaMensal={setNotasMensais ? (nota => setNotasMensais(ms => [...ms, nota])) : null} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey} formHash={formHash}/>
       )}
 
       {showRegistrar && <RegistrarNFModal jogosRodada={jogosRodada} notasExistentes={notas} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowRegistrar(null)} T={T} portal={portal}/>}
