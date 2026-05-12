@@ -112,9 +112,7 @@ function extrairServicos(jogo) {
   CATS.forEach(cat => {
     cat.subs.forEach(sub => {
       if (SUBS_EXCLUIR.has(sub.key)) return;
-      const valProv = jogo.provisionado?.[sub.key] || 0;
-      const valOrc  = jogo.orcado?.[sub.key] || 0;
-      const valorRef = valProv > 0 ? valProv : valOrc;
+      const valorRef = jogo.provisionado?.[sub.key] || 0;
       if (valorRef > 0) {
         servicos.push({ subKey: sub.key, subLabel: sub.label, catLabel: cat.label, catColor: cat.color, valorRef });
       }
