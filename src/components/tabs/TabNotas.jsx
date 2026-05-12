@@ -1449,10 +1449,13 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             });
           }
           const servicosRaw = [...baseFinal, ...portalExtras];
+          const _jid = jogo.id;
           const nfsDoJogo = notas.filter(n =>
-            n.servicosKeys?.some(k => k.startsWith(`${jogo.id}_`))
-            || (n.tipo === "avulsa" && n.jogoId === jogo.id)
-            || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
+            n.servicosKeys?.some(k => k.startsWith(`${_jid}_`))
+            || (n.tipo === "avulsa" && (n.jogoId === _jid || String(n.jogoId) === String(_jid)))
+            || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).map(Number).includes(_jid))
+            // fallback: prevista sem servicosKeys mas com jogoId correto
+            || (n.tipo === "prevista" && (n.jogoId === _jid || String(n.jogoId) === String(_jid)) && (!n.servicosKeys || n.servicosKeys.length === 0))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
           // sng_host é alias de sng — NFs com sng_host key aparecem na linha sng
@@ -1462,10 +1465,10 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
           // (ex: sng_host registrado quando Portal estava ativo, mas agora Portal não carregou)
           const rawKeys = new Set(servicosRaw.map(s => `${jogo.id}_${s.subKey}`));
           nfsDoJogo.forEach(n => {
+            // Rota 1: servicosKeys com prefixo jogoId
             (n.servicosKeys || []).forEach(k => {
               if (!k.startsWith(`${jogo.id}_`) || rawKeys.has(k)) return;
               const subKey = k.slice(String(jogo.id).length + 1);
-              // sng_host é alias de sng — não cria linha separada
               if (subKey === 'sng_host' && rawKeys.has(`${jogo.id}_sng`)) return;
               let subLabel = subKey, catLabel = '', catColor = '';
               CATS.forEach(cat => cat.subs.forEach(sub => {
@@ -1474,6 +1477,20 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
               servicosRaw.push({ subKey, subLabel, catLabel, catColor, valorRef: 0, fromNF: true });
               rawKeys.add(k);
             });
+            // Rota 2: NF prevista sem servicosKeys — cria linha via servicosValores
+            if ((!n.servicosKeys || n.servicosKeys.length === 0) && n.servicosValores) {
+              Object.keys(n.servicosValores).forEach(subKey => {
+                const k = `${jogo.id}_${subKey}`;
+                if (rawKeys.has(k)) return;
+                let subLabel = subKey, catLabel = '', catColor = '';
+                CATS.forEach(cat => cat.subs.forEach(sub => {
+                  if (sub.key === subKey) { subLabel = sub.label; catLabel = cat.label; catColor = cat.color; }
+                }));
+                servicosRaw.push({ subKey, subLabel, catLabel, catColor, valorRef: 0, fromNF: true });
+                rawKeys.add(k);
+                servicosComNF.add(k);
+              });
+            }
           });
 
           // Oculta serviços de prestadores internos SÓ SE não houver NF cadastrada para a linha
@@ -1516,7 +1533,12 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                       const key = `${jogo.id}_${s.subKey}`;
                       const isMulti = SUBS_MULTI_NF.has(s.subKey);
                       const aliasKey = s.subKey === 'sng' ? `${jogo.id}_sng_host` : null;
-                      const notasDestaLinha = nfsDoJogo.filter(n => n.servicosKeys?.includes(key) || (aliasKey && n.servicosKeys?.includes(aliasKey)));
+                      const notasDestaLinha = nfsDoJogo.filter(n =>
+                        n.servicosKeys?.includes(key) ||
+                        (aliasKey && n.servicosKeys?.includes(aliasKey)) ||
+                        // fallback: NF prevista sem servicosKeys, mesma pelo jogoId + valor do serviço
+                        ((!n.servicosKeys || n.servicosKeys.length === 0) && (n.servicosValores?.[s.subKey] != null || n.servicosDetalhe?.[key] != null))
+                      );
                       const valorUnit = notasDestaLinha.reduce((sum, n) => {
                         const detKey = (n.servicosDetalhe && n.servicosDetalhe[key] != null) ? key : (aliasKey && n.servicosDetalhe?.[aliasKey] != null ? aliasKey : null);
                         if (detKey) return sum + n.servicosDetalhe[detKey];
