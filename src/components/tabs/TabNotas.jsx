@@ -4,7 +4,7 @@ import { fmt, subTotal } from "../../utils";
 import { CATS, btnStyle, iSty, RADIUS } from "../../constants";
 import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile, getState, setState as setSupabaseState } from "../../lib/supabase";
 import { usePortalLink } from "../../hooks/usePortalLink";
-import { getOperacionaisPorSubKey, findFornecedorTolerante } from "../../lib/portalLink";
+import { getOperacionaisPorSubKey, findFornecedorTolerante, emiteNF } from "../../lib/portalLink";
 import { Card, PanelTitle, Button, Chip, Segmented, Progress, tableStyles } from "../ui";
 import { Plus, Eye, Trash2, Upload, Copy as CopyIcon, FileText } from "lucide-react";
 
@@ -1200,10 +1200,12 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
       return servicos.map(s => {
         const key = `${jogo.id}_${s.subKey}`;
         const nota = notas.find(n => n.servicosKeys?.includes(key));
-        return { key, rodada: jogo.rodada, status: nota ? "Conferida" : "Pendente" };
+        const forn = fornecedoresJogo[key] || "";
+        const isento = forn && !emiteNF(forn);
+        return { key, rodada: jogo.rodada, status: nota ? "Conferida" : isento ? "Isento" : "Pendente" };
       });
     });
-  }, [divulgados, notas]);
+  }, [divulgados, notas, fornecedoresJogo]);
 
   const totalPendente  = allServicos.filter(i => i.status === "Pendente").length;
   const totalConferida = allServicos.filter(i => i.status === "Conferida").length;
@@ -1443,7 +1445,12 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
-          const pendentes = servicos.filter(s => !servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
+          const pendentes = servicos.filter(s => {
+            const key = `${jogo.id}_${s.subKey}`;
+            if (servicosComNF.has(key)) return false;
+            const forn = fornecedoresJogo[key] || "";
+            return !forn || emiteNF(forn);
+          }).length;
           const conferidas = servicos.filter(s => servicosComNF.has(`${jogo.id}_${s.subKey}`)).length;
           const accentJogo = jogo.categoria==="B1"?T.brand:T.warning;
 
@@ -1484,8 +1491,10 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                       const hasNotas = notasDestaLinha.length > 0;
                       const diff = hasNotas ? valorUnit - s.valorRef : null;
                       const restante = s.valorRef - valorUnit;
-                      const statusLabel = !hasNotas ? "Pendente" : (isMulti && restante > 0.01 ? "Parcial" : "Conferida");
-                      const statusColor = !hasNotas ? T.warning : (statusLabel === "Parcial" ? T.info : T.brand);
+                      const fornKey = fornecedoresJogo[key] || "";
+                      const isento = !hasNotas && fornKey && !emiteNF(fornKey);
+                      const statusLabel = hasNotas ? (isMulti && restante > 0.01 ? "Parcial" : "Conferida") : isento ? "Isento" : "Pendente";
+                      const statusColor = hasNotas ? (statusLabel === "Parcial" ? T.info : T.brand) : isento ? T.textSm : T.warning;
                       const nota = notasDestaLinha[0];
                       return (
                         <tr key={s.subKey} style={TS.tr}>

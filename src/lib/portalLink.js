@@ -57,6 +57,7 @@ const norm = s => String(s || '')
 const NAO_EMITE_NF = [
   'anderson fernandes',
   'rafael gusmao',
+  'gusmao',
   'op da produtora',
   'op. da produtora',
   'operador da produtora',
@@ -70,7 +71,7 @@ const VALORES_NULOS = new Set(['nao', 'n/a', 'na', 'sem', '-', '--', 'x', 'nenhu
 // (ex: "NÃO / Narração no local 5 câmeras..." vira observação, não é fornecedor)
 const PREFIXOS_NULOS = ['nao ', 'sem ', 'n a '];
 
-function emiteNF(nomeOperacional) {
+export function emiteNF(nomeOperacional) {
   const n = norm(nomeOperacional);
   if (!n) return false;
   if (VALORES_NULOS.has(n)) return false;
