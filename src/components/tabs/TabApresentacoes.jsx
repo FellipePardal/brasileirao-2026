@@ -527,18 +527,21 @@ const orcAuto = sec.itens.reduce((s, it) => {
   }
   return s + (orc / 12) * mesesDecorridos;
 }, 0);
-const provAuto  = sec.itens.reduce((s, it) => {
-  if (it.status === "encerrado") return s + (it.realAoEncerrar || 0);
+const itensDebug = sec.itens.map(it => {
+  if (it.status === "encerrado") return { nome: it.nome, tipo: "encerrado", prov: it.realAoEncerrar || 0, ratio: null, contribui: it.realAoEncerrar || 0, mesesAlocacao: [] };
   const prov = it.provisionado || 0;
   const tipo = it.tipo || "linear";
-  if (tipo === "pontual") return s + prov * pontualRatio(it, mesAtual);
-  if (tipo === "misto") {
-    const pl = it.parcelaLinear || 0;
-    const pp = it.parcelaPontual || 0;
-    return s + (pl / 12) * mesesDecorridos + pp * pontualRatio(it, mesAtual);
+  if (tipo === "pontual") {
+    const ratio = pontualRatio(it, mesAtual);
+    return { nome: it.nome, tipo, prov, ratio, contribui: prov * ratio, mesesAlocacao: it.mesesAlocacao || [] };
   }
-  return s + (prov / 12) * mesesDecorridos;
-}, 0);
+  if (tipo === "misto") {
+    const pl = it.parcelaLinear || 0; const pp = it.parcelaPontual || 0;
+    return { nome: it.nome, tipo, prov, ratio: null, contribui: (pl / 12) * mesesDecorridos + pp * pontualRatio(it, mesAtual), mesesAlocacao: it.mesesAlocacao || [] };
+  }
+  return { nome: it.nome, tipo: "linear", prov, ratio: null, contribui: (prov / 12) * mesesDecorridos, mesesAlocacao: [] };
+});
+const provAuto = itensDebug.reduce((s, it) => s + it.contribui, 0);
 const provTotalAnual = provAnual;
 // prov anual apenas de itens ativos (encerrados saem da expectativa de NFs)
 const provAnualAtivos = sec.itens
@@ -551,7 +554,7 @@ const gastoAuto = notasMensais
 const gastoEncerrados = notasMensais
 .filter(n => n.servicoId && idsEncerrados.includes(n.servicoId) && n.mes <= mesAtual)
 .reduce((s, n) => s + (n.valor || 0), 0);
-return { secao: sec.secao, orcAnual, orcAuto, provAuto, provTotalAnual, provAnualAtivos, gastoAuto, gastoEncerrados };
+return { secao: sec.secao, orcAnual, orcAuto, provAuto, provTotalAnual, provAnualAtivos, gastoAuto, gastoEncerrados, itensDebug };
 });
 
 // "Outros Mensais": NFs sem servicoId e sem categoria variável mapeada
@@ -889,7 +892,10 @@ return (
             const orcVal   = parseBR(s.orc);
             const provVal  = parseBR(s.prov);
             const sav      = orcVal - provVal;
+            const debug    = computed.sections.find(x => x.secao === s.secao)?.itensDebug || [];
+            const MESES_SHORT = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
             return (
+              <>
               <tr key={s.secao} style={{borderBottom:`1px solid ${T.border}`}}>
                 <td style={{padding:"6px 12px",fontWeight:700,color:"#3b82f6",fontSize:13}}>{s.secao}</td>
                 <td style={{padding:"4px 12px",textAlign:"right"}}>
@@ -906,6 +912,32 @@ return (
                 </td>
                 <td style={{padding:"6px 12px",textAlign:"right",fontWeight:700,color:sav>=0?"#a3e635":"#ef4444"}}>{sav>=0?"▲ ":"▼ "}{fmtR(Math.abs(sav))}</td>
               </tr>
+              {debug.length > 0 && (
+                <tr key={s.secao+"_debug"} style={{background:T.bg}}>
+                  <td colSpan={5} style={{padding:"6px 12px 10px 24px"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                      <thead><tr>
+                        {["Item","Tipo","Prov. Anual","Meses Aloc.","Ratio/Fator","Contribui"].map((h,i)=>(
+                          <th key={h} style={{padding:"3px 8px",textAlign:i===0?"left":"right",color:T.textSm,borderBottom:`1px solid ${T.border}`}}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {debug.map(it => (
+                          <tr key={it.nome}>
+                            <td style={{padding:"3px 8px",color:T.textMd}}>{it.nome}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",color:it.tipo==="pontual"?"#d97706":it.tipo==="linear"?T.textSm:"#7c3aed"}}>{it.tipo}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",color:T.text}}>{fmtBRL(it.prov)}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",color:T.textSm}}>{it.mesesAlocacao?.length ? it.mesesAlocacao.map(m => MESES_SHORT[m] ?? m).join(", ") : "—"}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",color:T.textSm}}>{it.ratio !== null ? `${(it.ratio*100).toFixed(0)}%` : `÷12×${mesesDecorridos}`}</td>
+                            <td style={{padding:"3px 8px",textAlign:"right",fontWeight:700,color:"#3b82f6"}}>{fmtBRL(it.contribui)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </td>
+                </tr>
+              )}
+              </>
             );
           })}
           {sectionsView.length === 0 && (
