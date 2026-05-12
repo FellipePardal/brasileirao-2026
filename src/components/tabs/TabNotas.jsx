@@ -799,8 +799,11 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
 
   const startEdit = (sub) => {
     setEditingId(sub.id);
-    // Copiar servicosValores para edição
-    setEditServicos({...(sub.servicosValores || {})});
+    if (sub.tipo === "mensal") {
+      setEditServicos({ _mensal: sub.valorNF || 0 });
+    } else {
+      setEditServicos({...(sub.servicosValores || {})});
+    }
   };
 
   const toggleEditServico = (sub, subKey) => {
@@ -817,28 +820,40 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
   };
 
   const aprovar = (sub) => {
-    const sv = editingId === sub.id ? editServicos : (sub.servicosValores || {});
-    const valorNF = Object.values(sv).reduce((s, v) => s + (v || 0), 0);
-    const jogo = divulgados.find(j => j.id === sub.jogoId);
-    const allServicos = jogo ? extrairServicos(jogo) : [];
-    const servicosKeys = Object.keys(sv).map(sk => `${sub.jogoId}_${sk}`);
-    const servicosLabels = Object.keys(sv).map(sk => {
-      const s = allServicos.find(x => x.subKey === sk);
-      return s ? s.subLabel : sk;
-    });
-
-    const mandante = jogo?.mandante || sub.jogoLabel?.split(/\s*x\s*/)[0] || "";
-    const visitante = jogo?.visitante || sub.jogoLabel?.split(/\s*x\s*/)[1] || "";
-    const nota = {
-      ...sub,
-      servicosValores: sv,
-      servicosKeys,
-      servicosLabels,
-      valorNF,
-      tipo: "prevista",
-      status: "Conferida",
-      codigo: gerarCodigo(sub.rodada, mandante, visitante, valorNF, sub.numeroNF),
-    };
+    let valorNF, nota;
+    if (sub.tipo === "mensal") {
+      valorNF = editingId === sub.id ? (editServicos._mensal || 0) : (sub.valorNF || 0);
+      const nfNum = (sub.numeroNF || "SN").replace(/\s/g, "");
+      nota = {
+        ...sub,
+        valorNF,
+        valor: valorNF,
+        status: "Conferida",
+        codigo: `MENSAL_${(sub.mesLabel||"").replace(/\s/g,"")}_${Math.round(valorNF)}_NF${nfNum}`,
+      };
+    } else {
+      const sv = editingId === sub.id ? editServicos : (sub.servicosValores || {});
+      valorNF = Object.values(sv).reduce((s, v) => s + (v || 0), 0);
+      const jogo = divulgados.find(j => j.id === sub.jogoId);
+      const allServicos = jogo ? extrairServicos(jogo) : [];
+      const servicosKeys = Object.keys(sv).map(sk => `${sub.jogoId}_${sk}`);
+      const servicosLabels = Object.keys(sv).map(sk => {
+        const s = allServicos.find(x => x.subKey === sk);
+        return s ? s.subLabel : sk;
+      });
+      const mandante = jogo?.mandante || sub.jogoLabel?.split(/\s*x\s*/)[0] || "";
+      const visitante = jogo?.visitante || sub.jogoLabel?.split(/\s*x\s*/)[1] || "";
+      nota = {
+        ...sub,
+        servicosValores: sv,
+        servicosKeys,
+        servicosLabels,
+        valorNF,
+        tipo: "prevista",
+        status: "Conferida",
+        codigo: gerarCodigo(sub.rodada, mandante, visitante, valorNF, sub.numeroNF),
+      };
+    }
     addNota(nota);
     salvarHistorico([...historico, {...sub, decisao:"aprovada", decidoEm: new Date().toISOString()}]);
     const next = submissions.filter(s => s.id !== sub.id);
@@ -895,14 +910,18 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
         const jogo = divulgados.find(j => j.id === sub.jogoId);
         const allServicos = jogo ? extrairServicos(jogo) : [];
         const svAtual = isEditing ? editServicos : (sub.servicosValores || {});
-        const valorAtual = Object.values(svAtual).reduce((s, v) => s + (v || 0), 0);
+        const valorAtual = sub.tipo === "mensal"
+          ? (isEditing ? (editServicos._mensal || 0) : (sub.valorNF || 0))
+          : Object.values(svAtual).reduce((s, v) => s + (v || 0), 0);
 
         return (
           <div key={sub.id} style={{background:T.card,borderRadius:12,padding:"16px 20px",marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:12}}>
               <div>
                 <span style={{fontWeight:700,fontSize:14,color:T.text}}>{sub.fornecedor}</span>
-                <span style={{color:T.textSm,fontSize:12,marginLeft:12}}>{sub.jogoLabel} · Rd {sub.rodada}</span>
+                {sub.tipo === "mensal"
+                  ? <span style={{color:T.textSm,fontSize:12,marginLeft:12}}>{sub.mesLabel} · {sub.servicoNome}</span>
+                  : <span style={{color:T.textSm,fontSize:12,marginLeft:12}}>{sub.jogoLabel} · Rd {sub.rodada}</span>}
                 {sub.numeroNF && <span style={{color:T.textSm,fontSize:11,marginLeft:8}}>NF {sub.numeroNF}</span>}
               </div>
               <span style={{color:"#8b5cf6",fontWeight:700,fontSize:16}}>{fmt(valorAtual)}</span>
@@ -911,27 +930,38 @@ function RecebidasTab({ notas, addNota, jogos, T, submissionsKey = 'nf_submissio
             {/* Serviços — modo visualização ou edição */}
             {!isEditing ? (
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
-                {Object.entries(svAtual).map(([sk, val]) => {
-                  const label = allServicos.find(x => x.subKey === sk)?.subLabel || sk;
-                  return <Pill key={sk} label={`${label}: ${fmt(val)}`} color="#06b6d4"/>;
-                })}
+                {sub.tipo === "mensal"
+                  ? <Pill label={`${sub.servicoNome}: ${fmt(sub.valorNF || 0)}`} color="#06b6d4"/>
+                  : Object.entries(svAtual).map(([sk, val]) => {
+                      const label = allServicos.find(x => x.subKey === sk)?.subLabel || sk;
+                      return <Pill key={sk} label={`${label}: ${fmt(val)}`} color="#06b6d4"/>;
+                    })}
               </div>
             ) : (
               <div style={{background:T.bg,borderRadius:8,padding:10,marginBottom:12}}>
-                <p style={{color:T.textMd,fontSize:11,fontWeight:600,margin:"0 0 8px"}}>Editar serviços e valores:</p>
-                {allServicos.map(s => {
-                  const ativo = editServicos[s.subKey] !== undefined;
-                  return (
-                    <div key={s.subKey} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,padding:"4px 0"}}>
-                      <input type="checkbox" checked={ativo} onChange={() => toggleEditServico(sub, s.subKey)}/>
-                      <span style={{flex:1,fontSize:12,color:ativo?T.text:T.textSm}}>{s.subLabel}</span>
-                      {ativo && (
-                        <input type="number" value={editServicos[s.subKey]} onChange={e => setEditValor(s.subKey, e.target.value)}
-                          style={{background:T.card,border:`1px solid ${T.muted}`,borderRadius:6,color:"#8b5cf6",padding:"4px 8px",width:90,textAlign:"right",fontSize:12,fontWeight:600}}/>
-                      )}
-                    </div>
-                  );
-                })}
+                {sub.tipo === "mensal" ? (<>
+                  <p style={{color:T.textMd,fontSize:11,fontWeight:600,margin:"0 0 8px"}}>Editar valor:</p>
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+                    <span style={{flex:1,fontSize:12,color:T.text,fontWeight:600}}>{sub.servicoNome}</span>
+                    <input type="number" value={editServicos._mensal ?? ""} onChange={e => setEditValor("_mensal", e.target.value)}
+                      style={{background:T.card,border:`1px solid ${T.muted}`,borderRadius:6,color:"#8b5cf6",padding:"4px 8px",width:110,textAlign:"right",fontSize:13,fontWeight:700}} autoFocus/>
+                  </div>
+                </>) : (<>
+                  <p style={{color:T.textMd,fontSize:11,fontWeight:600,margin:"0 0 8px"}}>Editar serviços e valores:</p>
+                  {allServicos.map(s => {
+                    const ativo = editServicos[s.subKey] !== undefined;
+                    return (
+                      <div key={s.subKey} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,padding:"4px 0"}}>
+                        <input type="checkbox" checked={ativo} onChange={() => toggleEditServico(sub, s.subKey)}/>
+                        <span style={{flex:1,fontSize:12,color:ativo?T.text:T.textSm}}>{s.subLabel}</span>
+                        {ativo && (
+                          <input type="number" value={editServicos[s.subKey]} onChange={e => setEditValor(s.subKey, e.target.value)}
+                            style={{background:T.card,border:`1px solid ${T.muted}`,borderRadius:6,color:"#8b5cf6",padding:"4px 8px",width:90,textAlign:"right",fontSize:12,fontWeight:600}}/>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>)}
                 <div style={{borderTop:`1px solid ${T.border}`,marginTop:6,paddingTop:6,textAlign:"right"}}>
                   <span style={{fontSize:13,fontWeight:700,color:"#8b5cf6"}}>Total: {fmt(valorAtual)}</span>
                 </div>
