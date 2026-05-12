@@ -21,9 +21,10 @@ export const SUBKEY_TO_PORTAL = {
 
   geradores:   { source: 'controle', cols: ['gerador'] },
 
-  // SNG: tratado como 2 subKeys virtuais (Premiere e Host são serviços distintos com fornecedores próprios)
+  // SNG Host = SNG (mesma linha, mesmo fornecedor); Premiere usa bucket sng_extra
+  sng:          { source: 'controle', cols: ['sng_host'] },
   sng_premiere: { source: 'controle', cols: ['sng_premiere'] },
-  sng_host:     { source: 'controle', cols: ['sng_host'] },
+  sng_host:     { source: 'controle', cols: ['sng_host'] }, // alias legacy — NFs antigas
   // SNG Extra (CATS) = SNG Premiere — mesmo fornecedor
   sng_extra:    { source: 'controle', cols: ['sng_premiere'] },
 

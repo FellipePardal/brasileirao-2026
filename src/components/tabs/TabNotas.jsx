@@ -180,11 +180,14 @@ function RegistrarNFModal({ jogosRodada, notasExistentes, fornecedores, onSave, 
       const opCat = CATS.find(c => c.key === 'operacoes') || CATS[0];
       // SNG: divide em Premiere e Host (usam buckets financeiros diferentes — sng_extra e sng)
       const sngP = getOperacionaisPorSubKey(jogo.id, 'sng_premiere', portal);
-      const sngH = getOperacionaisPorSubKey(jogo.id, 'sng_host', portal);
-      if (sngP.length || sngH.length) {
-        baseFinal = base.filter(s => s.subKey !== 'sng' && s.subKey !== 'sng_extra');
-        if (sngH.length) portalExtras.push({ subKey: 'sng_host', subLabel: 'SNG Host', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng || 0, fromPortal: true });
-        if (sngP.length) portalExtras.push({ subKey: 'sng_premiere', subLabel: 'SNG Premiere', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng_extra || 0, fromPortal: true });
+      if (sngP.length) {
+        baseFinal = base.filter(s => s.subKey !== 'sng_extra');
+        portalExtras.push({ subKey: 'sng_premiere', subLabel: 'SNG Premiere', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng_extra || 0, fromPortal: true });
+      }
+      // sng_host = sng: se não há linha sng no base (provisionado=0) mas Portal tem provider externo, cria
+      if (!baseKeys.has('sng')) {
+        const sngOpers = getOperacionaisPorSubKey(jogo.id, 'sng', portal, jogo.categoria);
+        if (sngOpers.length) portalExtras.push({ subKey: 'sng', subLabel: 'SNG', catLabel: opCat.label, catColor: opCat.color, valorRef: 0, fromPortal: true });
       }
       CATS.forEach(cat => {
         cat.subs.forEach(sub => {
@@ -1145,9 +1148,9 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
           aplicarSubKey(jogo, sub.key);
         });
       });
-      // SNG dividido em duas linhas
+      // SNG Host = SNG (mesma linha); Premiere é separada
+      aplicarSubKey(jogo, 'sng');
       aplicarSubKey(jogo, 'sng_premiere');
-      aplicarSubKey(jogo, 'sng_host');
     });
     if (changed) {
       setFornecedoresJogo(prev => ({ ...prev, ...updates }));
@@ -1418,11 +1421,14 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             const opCat = CATS.find(c => c.key === 'operacoes') || CATS[0];
             // SNG: separa em Host (bucket sng) + Premiere (bucket sng_extra)
             const sngP = getOperacionaisPorSubKey(jogo.id, 'sng_premiere', portal);
-            const sngH = getOperacionaisPorSubKey(jogo.id, 'sng_host', portal);
-            if (sngP.length || sngH.length) {
-              baseFinal = baseServicos.filter(s => s.subKey !== 'sng' && s.subKey !== 'sng_extra');
-              if (sngH.length) portalExtras.push({ subKey: 'sng_host', subLabel: 'SNG Host', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng || 0, fromPortal: true });
-              if (sngP.length) portalExtras.push({ subKey: 'sng_premiere', subLabel: 'SNG Premiere', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng_extra || 0, fromPortal: true });
+            if (sngP.length) {
+              baseFinal = baseServicos.filter(s => s.subKey !== 'sng_extra');
+              portalExtras.push({ subKey: 'sng_premiere', subLabel: 'SNG Premiere', catLabel: opCat.label, catColor: opCat.color, valorRef: jogo.provisionado?.sng_extra || 0, fromPortal: true });
+            }
+            // sng_host = sng: se não há linha sng no base, cria via portal se tiver provider externo
+            if (!baseKeys.has('sng')) {
+              const sngOpers = getOperacionaisPorSubKey(jogo.id, 'sng', portal, jogo.categoria);
+              if (sngOpers.length) portalExtras.push({ subKey: 'sng', subLabel: 'SNG', catLabel: opCat.label, catColor: opCat.color, valorRef: 0, fromPortal: true });
             }
             CATS.forEach(cat => {
               cat.subs.forEach(sub => {
@@ -1449,6 +1455,8 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             || (n.tipo === "reembolso_livemode" && (n.jogoIds || []).includes(jogo.id))
           );
           const servicosComNF = new Set(nfsDoJogo.flatMap(n => n.servicosKeys || []));
+          // sng_host é alias de sng — NFs com sng_host key aparecem na linha sng
+          servicosComNF.forEach(k => { if (k.endsWith('_sng_host')) servicosComNF.add(k.replace('_sng_host', '_sng')); });
 
           // Garante linha para qualquer servicoKey de NF existente que não esteja em servicosRaw
           // (ex: sng_host registrado quando Portal estava ativo, mas agora Portal não carregou)
@@ -1457,6 +1465,8 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             (n.servicosKeys || []).forEach(k => {
               if (!k.startsWith(`${jogo.id}_`) || rawKeys.has(k)) return;
               const subKey = k.slice(String(jogo.id).length + 1);
+              // sng_host é alias de sng — não cria linha separada
+              if (subKey === 'sng_host' && rawKeys.has(`${jogo.id}_sng`)) return;
               let subLabel = subKey, catLabel = '', catColor = '';
               CATS.forEach(cat => cat.subs.forEach(sub => {
                 if (sub.key === subKey) { subLabel = sub.label; catLabel = cat.label; catColor = cat.color; }
@@ -1505,10 +1515,13 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                     {servicos.map(s => {
                       const key = `${jogo.id}_${s.subKey}`;
                       const isMulti = SUBS_MULTI_NF.has(s.subKey);
-                      const notasDestaLinha = nfsDoJogo.filter(n => n.servicosKeys?.includes(key));
+                      const aliasKey = s.subKey === 'sng' ? `${jogo.id}_sng_host` : null;
+                      const notasDestaLinha = nfsDoJogo.filter(n => n.servicosKeys?.includes(key) || (aliasKey && n.servicosKeys?.includes(aliasKey)));
                       const valorUnit = notasDestaLinha.reduce((sum, n) => {
-                        if (n.servicosDetalhe && n.servicosDetalhe[key] != null) return sum + n.servicosDetalhe[key];
-                        if (n.servicosValores?.[s.subKey] != null) return sum + n.servicosValores[s.subKey];
+                        const detKey = (n.servicosDetalhe && n.servicosDetalhe[key] != null) ? key : (aliasKey && n.servicosDetalhe?.[aliasKey] != null ? aliasKey : null);
+                        if (detKey) return sum + n.servicosDetalhe[detKey];
+                        const svKey = n.servicosValores?.[s.subKey] != null ? s.subKey : (aliasKey ? 'sng_host' : null);
+                        if (svKey && n.servicosValores?.[svKey] != null) return sum + n.servicosValores[svKey];
                         return sum;
                       }, 0);
                       const hasNotas = notasDestaLinha.length > 0;
