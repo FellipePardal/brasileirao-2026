@@ -1116,8 +1116,9 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario' }) {
-  const { portal } = usePortalLink('brasileirao');
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario', usarPortal = true }) {
+  const { portal: _portalRaw } = usePortalLink('brasileirao');
+  const portal = usarPortal ? _portalRaw : null;
 
   // Sincroniza fornecedoresJogo com o Portal (matriz). Converte o nome operacional do Portal
   // no apelido canônico cadastrado no Hub (quando bate por match tolerante).
@@ -1200,6 +1201,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
       const servicos = extrairServicos(jogo);
       return servicos
         .filter(s => {
+          if (!usarPortal) return true; // Paulistão F: exibe todos os serviços provisionados
           const key = `${jogo.id}_${s.subKey}`;
           const hasNF = notas.some(n => n.servicosKeys?.includes(key));
           if (hasNF) return true;
@@ -1494,7 +1496,9 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
           });
 
           // Oculta serviços de prestadores internos SÓ SE não houver NF cadastrada para a linha
+          // Paulistão F (usarPortal=false): exibe todos os serviços provisionados sem filtro
           const servicos = servicosRaw.filter(s => {
+            if (!usarPortal) return true;
             const key = `${jogo.id}_${s.subKey}`;
             if (servicosComNF.has(key)) return true;
             const forn = fornecedoresJogo[key] || "";
