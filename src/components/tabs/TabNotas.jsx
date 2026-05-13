@@ -103,7 +103,7 @@ function PreviewModal({ nota, onClose, T }) {
   );
 }
 
-const SUBS_EXCLUIR = new Set(["transporte","uber","hospedagem","seg_espacial","infra","seg_extra"]);
+const SUBS_EXCLUIR = new Set(["transporte","uber","hospedagem","seg_espacial","infra","seg_extra","downlink","distribuicao","maquinas"]);
 // Subs que aceitam várias NFs compondo o mesmo provisionado (ex: diária, extras)
 const SUBS_MULTI_NF = new Set(["diaria","extra"]);
 
