@@ -103,15 +103,16 @@ function PreviewModal({ nota, onClose, T }) {
   );
 }
 
-const SUBS_EXCLUIR = new Set(["transporte","uber","hospedagem","seg_espacial","infra","seg_extra","downlink","distribuicao","maquinas"]);
+const SUBS_EXCLUIR = new Set(["transporte","uber","hospedagem","seg_espacial","infra","seg_extra"]);
 // Subs que aceitam várias NFs compondo o mesmo provisionado (ex: diária, extras)
 const SUBS_MULTI_NF = new Set(["diaria","extra"]);
 
-function extrairServicos(jogo) {
+function extrairServicos(jogo, extraExcluir) {
   const servicos = [];
   CATS.forEach(cat => {
     cat.subs.forEach(sub => {
       if (SUBS_EXCLUIR.has(sub.key)) return;
+      if (extraExcluir?.has(sub.key)) return;
       const valorRef = jogo.provisionado?.[sub.key] || 0;
       if (valorRef > 0) {
         servicos.push({ subKey: sub.key, subLabel: sub.label, catLabel: cat.label, catColor: cat.color, valorRef });
@@ -141,7 +142,7 @@ const norm = s => String(s || '').trim().toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-function RegistrarNFModal({ jogosRodada, notasExistentes, fornecedores, onSave, onClose, T, portal }) {
+function RegistrarNFModal({ jogosRodada, notasExistentes, fornecedores, onSave, onClose, T, portal, subsExcluir = SUBS_EXCLUIR }) {
   const IS = iSty(T);
   const [form, setForm] = useState({
     numeroNF: "", fornecedor: "", dataEmissao: "", dataEnvio: "", obs: "", valorNF: "",
@@ -170,7 +171,7 @@ function RegistrarNFModal({ jogosRodada, notasExistentes, fornecedores, onSave, 
 
   // Serviços livres por jogo (provisionado > 0 + extras com fornecedor no Portal)
   const jogosComServicos = jogosRodada.map(jogo => {
-    const base = extrairServicos(jogo);
+    const base = extrairServicos(jogo, subsExcluir);
     const baseKeys = new Set(base.map(s => s.subKey));
     const portalExtras = [];
     // Mantém todas as linhas UM com provisionado > 0 (categoria pode mudar entre orcamento e execução)
@@ -193,7 +194,7 @@ function RegistrarNFModal({ jogosRodada, notasExistentes, fornecedores, onSave, 
         cat.subs.forEach(sub => {
           if (sub.key === 'sng') return;
           if (baseKeys.has(sub.key)) return;
-          if (SUBS_EXCLUIR.has(sub.key)) return;
+          if (subsExcluir.has(sub.key)) return;
           if (/^um_b/.test(sub.key) && baseTemUM) return;
           const opers = getOperacionaisPorSubKey(jogo.id, sub.key, portal, jogo.categoria);
           if (opers.length > 0) {
@@ -1116,7 +1117,8 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario', usarPortal = true }) {
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario', usarPortal = true, subsExcluirExtra = [] }) {
+  const subsExcluir = subsExcluirExtra.length ? new Set([...SUBS_EXCLUIR, ...subsExcluirExtra]) : SUBS_EXCLUIR;
   const { portal: _portalRaw } = usePortalLink('brasileirao');
   const portal = usarPortal ? _portalRaw : null;
 
@@ -1198,7 +1200,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
   // Stats
   const allServicos = useMemo(() => {
     return divulgados.flatMap(jogo => {
-      const servicos = extrairServicos(jogo);
+      const servicos = extrairServicos(jogo, subsExcluir);
       return servicos
         .filter(s => {
           if (!usarPortal) return true; // Paulistão F: exibe todos os serviços provisionados
@@ -1410,7 +1412,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
 
         {jogosRodada.map(jogo => {
           // Base: serviços com provisionado > 0
-          const baseServicos = extrairServicos(jogo);
+          const baseServicos = extrairServicos(jogo, subsExcluir);
           const baseKeys = new Set(baseServicos.map(s => s.subKey));
           // Extras: serviços onde o Portal tem fornecedor (mesmo sem provisionado).
           // Valor de referência fica 0 — preenche depois quando a NF chegar.
@@ -1436,7 +1438,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
               cat.subs.forEach(sub => {
                 if (sub.key === 'sng') return;
                 if (baseKeys.has(sub.key)) return;
-                if (SUBS_EXCLUIR.has(sub.key)) return;
+                if (subsExcluir.has(sub.key)) return;
                 // Se base já tem alguma linha UM (provisionado), não duplica via Portal
                 if (/^um_b/.test(sub.key) && baseTemUM) return;
                 const opers = getOperacionaisPorSubKey(jogo.id, sub.key, portal, jogo.categoria);
@@ -1799,7 +1801,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
         <RecebidasTab notas={notas} addNota={addNota} addNotaMensal={setNotasMensais ? (nota => setNotasMensais(ms => [...ms, nota])) : null} jogos={jogos} T={T} submissionsKey={submissionsKey} historicoKey={historicoKey} formHash={formHash}/>
       )}
 
-      {showRegistrar && <RegistrarNFModal jogosRodada={jogosRodada} notasExistentes={notas} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowRegistrar(null)} T={T} portal={portal}/>}
+      {showRegistrar && <RegistrarNFModal jogosRodada={jogosRodada} notasExistentes={notas} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowRegistrar(null)} T={T} portal={portal} subsExcluir={subsExcluir}/>}
       {showAvulsa && <NFAvulsaModal jogos={jogos} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowAvulsa(false)} T={T}/>}
       {showLivemode && <NFLivemodeModal jogos={jogos} fornecedores={fornecedores} onSave={addNota} onClose={() => setShowLivemode(false)} T={T}/>}
       {preview && <PreviewModal nota={preview} onClose={() => setPreview(null)} T={T}/>}
