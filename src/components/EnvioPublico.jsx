@@ -15,27 +15,43 @@ const fmt = v => (v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",
 const STATUS_NOTA = ["Pendente","Pago","Alteração"];
 const STATUS_NOTA_COLOR = {"Pendente":"#f59e0b","Pago":"#22c55e","Alteração":"#ef4444"};
 
-export default function EnvioPublico({ numero }) {
+const parseEnvioRef = ref => {
+  const raw = decodeURIComponent(String(ref || ""));
+  const [maybeKey, ...rest] = raw.split(":");
+  if (rest.length > 0 && maybeKey) return { stateKey: maybeKey, target: rest.join(":") };
+  return { stateKey: "envios", target: raw };
+};
+
+const envioMatches = (envio, target) => {
+  if (!envio) return false;
+  if (target?.startsWith("id:")) return String(envio.id) === target.slice(3);
+  if (envio.publicToken && envio.publicToken === target) return true;
+  if (/^\d+$/.test(String(target || ""))) return Number(envio.numero) === Number(target);
+  return false;
+};
+
+export default function EnvioPublico({ numero, envioRef }) {
   const [envio, setEnvio] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showConfirm, setShowConfirm] = useState(false);
   const [payerName, setPayerName] = useState("");
   const [paying, setPaying] = useState(false);
+  const { stateKey, target } = parseEnvioRef(envioRef ?? numero);
 
   useEffect(() => {
-    getState('envios').then(ev => {
-      setEnvio((ev || []).find(e => e.numero === numero) || null);
+    getState(stateKey).then(ev => {
+      setEnvio((ev || []).find(e => envioMatches(e, target)) || null);
       setLoading(false);
     });
-  }, [numero]);
+  }, [stateKey, target]);
 
   const confirmarPagamento = async () => {
     setPaying(true);
     try {
-      const todosEnvios = (await getState('envios')) || [];
+      const todosEnvios = (await getState(stateKey)) || [];
       const hoje = new Date();
       const dataHoje = hoje.toLocaleDateString("pt-BR");
-      const atualizado = todosEnvios.map(e => e.numero === numero
+      const atualizado = todosEnvios.map(e => envioMatches(e, target)
         ? {
             ...e,
             pago:true,
@@ -48,8 +64,8 @@ export default function EnvioPublico({ numero }) {
           }
         : e
       );
-      await setState('envios', atualizado);
-      setEnvio(atualizado.find(e => e.numero === numero) || null);
+      await setState(stateKey, atualizado);
+      setEnvio(atualizado.find(e => envioMatches(e, target)) || null);
       setShowConfirm(false);
       setPayerName("");
     } catch (e) {
@@ -66,14 +82,14 @@ export default function EnvioPublico({ numero }) {
 
   const updateNotaStatus = async (notaId, tipo, novoStatus) => {
     try {
-      const todosEnvios = (await getState('envios')) || [];
+      const todosEnvios = (await getState(stateKey)) || [];
       const campo = tipo === "jogo" ? "notasResumo" : tipo === "mensal" ? "mensaisResumo" : "livemodeResumo";
-      const atualizado = todosEnvios.map(e => e.numero !== numero ? e : {
+      const atualizado = todosEnvios.map(e => !envioMatches(e, target) ? e : {
         ...e,
         [campo]: (e[campo]||[]).map(n => n.id === notaId ? {...n, statusNota: novoStatus} : n),
       });
-      await setState('envios', atualizado);
-      setEnvio(atualizado.find(e => e.numero === numero) || null);
+      await setState(stateKey, atualizado);
+      setEnvio(atualizado.find(e => envioMatches(e, target)) || null);
     } catch (err) {
       alert("Erro ao atualizar status: " + err.message);
     }

@@ -7,8 +7,13 @@ import { Card, PanelTitle, Button, Chip, tableStyles } from "../ui";
 import { Plus, ArrowLeft, CheckCircle2, Clock, Eye, Trash2, Share2, ExternalLink, Download, Send, Package, Edit2, PlusCircle, X } from "lucide-react";
 
 const catTotal = (subs, cat) => cat.subs.reduce((s, sub) => s + (subs?.[sub.key]||0), 0);
+const nextEnvioNumero = envios => Math.max(0, ...(envios || []).map(e => Number(e.numero) || 0)) + 1;
+const makePublicToken = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `envio_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+};
 
-export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [], servicos, envios, setEnvios, T }) {
+export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [], servicos, envios, setEnvios, T, enviosKey = "envios" }) {
   const [view, setView] = useState("lista");
   const [envioDetalheId, setEnvioDetalheId] = useState(null);
 
@@ -66,14 +71,24 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const selMensaisArr = notasMensais.filter(n => selMensaisNFs.has(n.id));
   const selLivemodeArr = notasLivemode.filter(n => selLivemodeNFs.has(n.id));
   const totalSelValor = selJogosArr.reduce((s, n) => s + (n.valorNF||0), 0) + selMensaisArr.reduce((s, n) => s + (n.valor||0), 0) + selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
+  const proximoNumeroEnvio = nextEnvioNumero(envios);
+  const envioPublicRef = envio => `${enviosKey}:${envio.publicToken || `id:${envio.id}`}`;
+  const envioPublicHash = envio => `#envio/${encodeURIComponent(envioPublicRef(envio))}`;
+  const envioPublicUrl = envio => `${window.location.origin}${window.location.pathname}${envioPublicHash(envio)}`;
+  const copiarLinkEnvio = envio => {
+    const url = envioPublicUrl(envio);
+    navigator.clipboard.writeText(url);
+    alert("Link copiado!\n" + url);
+  };
 
   const criarEnvio = () => {
     if (selJogosNFs.size === 0 && selMensaisNFs.size === 0 && selLivemodeNFs.size === 0) return;
-    const numero = envios.length + 1;
+    const numero = proximoNumeroEnvio;
     const totalLivemode = selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
     const novo = {
       id: Date.now(),
       numero,
+      publicToken: makePublicToken(),
       nome: nomeEnvio.trim() || "",
       criadoEm: new Date().toISOString(),
       dataPagamento,
@@ -269,8 +284,8 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
                   {envio.pago?"Marcar pendente":"Marcar pago"}
                 </Button>
                 <Button T={T} variant="secondary" size="sm" icon={Eye} onClick={()=>{setEnvioDetalheId(envio.id);setView("detalhe");setEditandoNome(false);setAddingNotas(false);}}>Ver detalhes</Button>
-                <Button T={T} variant="secondary" size="sm" icon={Share2} onClick={()=>{const url=`${window.location.origin}${window.location.pathname}#envio/${envio.numero}`;navigator.clipboard.writeText(url);alert("Link copiado!\n"+url);}}>Compartilhar</Button>
-                <Button T={T} variant="secondary" size="sm" icon={ExternalLink} onClick={()=>window.open(`#envio/${envio.numero}`,"_blank")}>Abrir página</Button>
+                <Button T={T} variant="secondary" size="sm" icon={Share2} onClick={()=>copiarLinkEnvio(envio)}>Compartilhar</Button>
+                <Button T={T} variant="secondary" size="sm" icon={ExternalLink} onClick={()=>window.open(envioPublicHash(envio),"_blank")}>Abrir página</Button>
                 <Button T={T} variant="danger" size="sm" icon={Trash2} onClick={()=>excluirEnvio(envio.id)}>Excluir</Button>
               </div>
             </div>
@@ -290,7 +305,7 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 2fr",gap:12,marginBottom:16}}>
           <div>
             <label style={{color:T.textSm,fontSize:10,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700}}>Nome do Envio (opcional)</label>
-            <input value={nomeEnvio} onChange={e=>setNomeEnvio(e.target.value)} placeholder={`Envio ${envios.length + 1}`} style={IS}/>
+            <input value={nomeEnvio} onChange={e=>setNomeEnvio(e.target.value)} placeholder={`Envio ${proximoNumeroEnvio}`} style={IS}/>
           </div>
           <div>
             <label style={{color:T.textSm,fontSize:10,display:"block",marginBottom:6,letterSpacing:"0.06em",textTransform:"uppercase",fontWeight:700}}>Data de Pagamento</label>
@@ -426,8 +441,8 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
             <Button T={T} variant="secondary" size="sm" icon={PlusCircle} onClick={()=>{setAddingNotas(!addingNotas);setAddSelJogos(new Set());setAddSelMensais(new Set());setAddSelLivemode(new Set());}}>
               {addingNotas?"Cancelar":"Adicionar notas"}
             </Button>
-            <Button T={T} variant="secondary" size="sm" icon={Share2} onClick={()=>{const url=`${window.location.origin}${window.location.pathname}#envio/${envioDetalhe.numero}`;navigator.clipboard.writeText(url);alert("Link copiado!");}}>Compartilhar</Button>
-            <Button T={T} variant="secondary" size="sm" icon={ExternalLink} onClick={()=>window.open(`#envio/${envioDetalhe.numero}`,"_blank")}>Abrir página</Button>
+            <Button T={T} variant="secondary" size="sm" icon={Share2} onClick={()=>copiarLinkEnvio(envioDetalhe)}>Compartilhar</Button>
+            <Button T={T} variant="secondary" size="sm" icon={ExternalLink} onClick={()=>window.open(envioPublicHash(envioDetalhe),"_blank")}>Abrir página</Button>
           </div>
         </div>
 

@@ -682,7 +682,7 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
         {tab==="serviços livemode" && <TabLivemode livemode={livemode} setLivemode={setLivemode} notasLivemode={notasLivemode} setNotasLivemode={setNotasLivemode} jogos={jogos} setJogos={setJogos} fornecedores={fornecedores} T={T}/>}
         {tab==="logística"     && <TabLogistica logistica={logistica} setLogistica={setLogistica} jogos={jogos} fornecedores={fornecedores} eventosLog={eventosLog} setEventosLog={setEventosLog} T={T}/>}
         {tab==="apresentações" && <TabApresentacoes jogos={divulgados} servicos={servicosCalc} notasMensais={notasMensais} T={T}/>}
-        {tab==="envio"         && <TabEnvio jogos={jogosCalc} notas={notas} notasMensais={notasMensais} notasLivemode={notasLivemode} servicos={servicosCalc} envios={envios} setEnvios={setEnvios} T={T}/>}
+        {tab==="envio"         && <TabEnvio jogos={jogosCalc} notas={notas} notasMensais={notasMensais} notasLivemode={notasLivemode} servicos={servicosCalc} envios={envios} setEnvios={setEnvios} T={T} enviosKey="envios"/>}
 
       </div>
 
@@ -830,8 +830,8 @@ export default function App() {
   // Rotas públicas — acessíveis sem autenticação
   if (window.location.hash === "#formulario") return <FormularioPublico/>;
   if (window.location.hash === "#formulario-paulistao") return <FormularioPublicoPaulistao/>;
-  const envioMatch = window.location.hash.match(/^#envio\/(\d+)$/);
-  if (envioMatch) return <EnvioPublico numero={parseInt(envioMatch[1])}/>;
+  const envioMatch = window.location.hash.match(/^#envio\/(.+)$/);
+  if (envioMatch) return <EnvioPublico envioRef={envioMatch[1]}/>;
   const tabelaMatch = window.location.hash.match(/^#tabela\/([0-9a-fA-F-]+)$/);
   if (tabelaMatch) return <TabelaPrecoPublica token={tabelaMatch[1]}/>;
 
