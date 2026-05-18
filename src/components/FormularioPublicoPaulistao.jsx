@@ -166,32 +166,50 @@ function FormJogo({ divulgados, fornecedores, onDone, T }) {
 
   const handleSubmit = async () => {
     setSubmitting(true);
-    const submissions = [];
+    const submissionId = Date.now();
+    const servicosDetalhe = {};
+    const servicosValores = {};
+    const servicosKeys = [];
+    const servicosLabels = new Set();
+    const jogosResumo = [];
+    let hasFile = false;
+
+    if (arquivo) {
+      try { const d = await fileToDataUrl(arquivo); await saveNFFile(submissionId, d); hasFile = true; } catch(_){}
+    }
+
     for (const jogoId of jogosSel) {
       const jogo = divulgados.find(j => j.id === jogoId);
       if (!jogo) continue;
       const subs = servicosSel[jogoId] || [];
       if (subs.length === 0) continue;
-      const servicosValores = {};
-      let valorNF = 0;
-      subs.forEach(sk => { const v = valores[`${jogoId}_${sk}`] || 0; servicosValores[sk] = v; valorNF += v; });
-      const submissionId = Date.now() + jogoId;
-      let hasFile = false;
-      if (arquivo) {
-        try { const d = await fileToDataUrl(arquivo); await saveNFFile(submissionId, d); hasFile = true; } catch(_){}
-      }
-      submissions.push({
-        id: submissionId, tipo:"jogo", ...nfData, valorNF,
-        fase: jogo.fase, rodada: jogo.rodada, jogoId: jogo.id,
-        jogoLabel: `${jogo.mandante} x ${jogo.visitante}`,
-        mandante: jogo.mandante, visitante: jogo.visitante,
-        servicosKeys: subs.map(sk => `${jogo.id}_${sk}`),
-        servicosLabels: SERVICOS_JOGO.filter(s => subs.includes(s.subKey)).map(s => s.subLabel),
-        servicosValores, status:"pendente", hasFile, enviadoEm: new Date().toISOString(),
+      jogosResumo.push(jogo);
+      subs.forEach(sk => {
+        const key = `${jogo.id}_${sk}`;
+        const v = valores[key] || 0;
+        servicosDetalhe[key] = v;
+        servicosValores[sk] = (servicosValores[sk] || 0) + v;
+        servicosKeys.push(key);
+        const servico = SERVICOS_JOGO.find(s => s.subKey === sk);
+        if (servico) servicosLabels.add(servico.subLabel);
       });
     }
+    const valorNF = Object.values(servicosDetalhe).reduce((s, v) => s + (v || 0), 0);
+    const firstJogo = jogosResumo[0];
+    const submission = {
+      id: submissionId, tipo:"jogo", ...nfData, valorNF, valorFiscalTotal: valorNF,
+      fase: firstJogo?.fase, rodada: firstJogo?.rodada, jogoId: firstJogo?.id,
+      jogoIds: jogosResumo.map(j => j.id),
+      jogoLabel: jogosResumo.map(j => `${j.mandante} x ${j.visitante}`).join(" + "),
+      mandante: firstJogo?.mandante, visitante: firstJogo?.visitante,
+      servicosKeys,
+      servicosLabels: [...servicosLabels],
+      servicosValores,
+      servicosDetalhe,
+      status:"pendente", hasFile, enviadoEm: new Date().toISOString(),
+    };
     const current = (await getState('paulistao_nf_submissions')) || [];
-    await setState('paulistao_nf_submissions', [...current, ...submissions]);
+    await setState('paulistao_nf_submissions', [...current, submission]);
     setSubmitting(false);
     onDone();
   };

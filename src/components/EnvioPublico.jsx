@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { getState, setState, getNFFile } from "../lib/supabase";
+import { countNotasFiscais, getEnvioMetricas } from "../lib/notasFiscais";
 import { CheckCircle2, Clock, Printer, Download, Radio } from "lucide-react";
 
 const T = {
@@ -37,6 +38,7 @@ export default function EnvioPublico({ numero, envioRef }) {
   const [payerName, setPayerName] = useState("");
   const [paying, setPaying] = useState(false);
   const { stateKey, target } = parseEnvioRef(envioRef ?? numero);
+  const dedupeNotasPorNF = stateKey === "paulistao_envios";
 
   useEffect(() => {
     getState(stateKey).then(ev => {
@@ -107,6 +109,8 @@ export default function EnvioPublico({ numero, envioRef }) {
     </div>
   );
 
+  const metricas = getEnvioMetricas(envio, { dedupeNotasPorNF });
+  const qtdNotasJogos = countNotasFiscais(envio.notasResumo || [], { dedupe: dedupeNotasPorNF });
   const thS = { padding:"12px 14px", textAlign:"left", fontSize:10, color:T.textSm, fontWeight:700, letterSpacing:"0.08em", textTransform:"uppercase", borderBottom:`1px solid ${T.border}`, whiteSpace:"nowrap" };
   const tdS = { padding:"12px 14px", fontSize:12, borderBottom:`1px solid ${T.border}`, color:T.text };
 
@@ -134,7 +138,7 @@ export default function EnvioPublico({ numero, envioRef }) {
                 </span>
               </div>
               <p style={{fontSize:13,margin:"8px 0 0",color:"#bbf7d0"}}>
-                <span className="num">{new Date(envio.criadoEm).toLocaleDateString("pt-BR")}</span> · {envio.qtdNotas} nota{envio.qtdNotas!==1?"s":""}
+                <span className="num">{new Date(envio.criadoEm).toLocaleDateString("pt-BR")}</span> · {metricas.qtdNotas} nota{metricas.qtdNotas!==1?"s":""}
               </p>
               {envio.dataPagamento && <p style={{fontSize:12,margin:"4px 0 0",color:"#86efac",fontWeight:600}}>Pagamento previsto: <span className="num">{envio.dataPagamento}</span></p>}
               {envio.pago && (envio.dataPagamentoEfetiva || envio.pagoPor) && (
@@ -151,7 +155,7 @@ export default function EnvioPublico({ numero, envioRef }) {
               )}
             </div>
             <div style={{textAlign:"right"}}>
-              <p className="num" style={{fontSize:34,fontWeight:800,color:"#fff",margin:0,letterSpacing:"-0.025em"}}>{fmt(envio.totalGeral)}</p>
+              <p className="num" style={{fontSize:34,fontWeight:800,color:"#fff",margin:0,letterSpacing:"-0.025em"}}>{fmt(metricas.totalGeral)}</p>
               <p style={{fontSize:11,color:"#bbf7d0",margin:"4px 0 0",letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:600}}>Valor total do envio</p>
             </div>
           </div>
@@ -168,35 +172,35 @@ export default function EnvioPublico({ numero, envioRef }) {
       <div style={{maxWidth:960,margin:"0 auto",padding:"20px 24px 48px"}}>
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:14,marginBottom:28}}>
-          {envio.totalJogos > 0 && (
+          {metricas.totalJogos > 0 && (
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden",boxShadow:"0 4px 16px -8px rgba(15,23,42,0.15)"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:T.brand,boxShadow:`0 0 18px ${T.brand}88`}}/>
               <p style={{fontSize:10,color:T.textSm,margin:"4px 0 8px",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>NFs de Jogos</p>
-              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(envio.totalJogos)}</p>
-              <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{(envio.notasResumo||[]).length} notas</p>
+              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(metricas.totalJogos)}</p>
+              <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{qtdNotasJogos} notas</p>
             </div>
           )}
-          {envio.totalMensais > 0 && (
+          {metricas.totalMensais > 0 && (
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden",boxShadow:"0 4px 16px -8px rgba(15,23,42,0.15)"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:cyan,boxShadow:`0 0 18px ${cyan}88`}}/>
               <p style={{fontSize:10,color:T.textSm,margin:"4px 0 8px",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>NFs Mensais</p>
-              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(envio.totalMensais)}</p>
+              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(metricas.totalMensais)}</p>
               <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{(envio.mensaisResumo||[]).length} notas</p>
             </div>
           )}
-          {(envio.totalLivemode||0) > 0 && (
+          {metricas.totalLivemode > 0 && (
             <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden",boxShadow:"0 4px 16px -8px rgba(15,23,42,0.15)"}}>
               <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#14b8a6",boxShadow:"0 0 18px #14b8a688"}}/>
               <p style={{fontSize:10,color:T.textSm,margin:"4px 0 8px",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>NFs Livemode</p>
-              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(envio.totalLivemode)}</p>
+              <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(metricas.totalLivemode)}</p>
               <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{(envio.livemodeResumo||[]).length} notas</p>
             </div>
           )}
           <div style={{background:T.card,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px",position:"relative",overflow:"hidden",boxShadow:"0 4px 16px -8px rgba(15,23,42,0.15)"}}>
             <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:purple,boxShadow:`0 0 18px ${purple}88`}}/>
             <p style={{fontSize:10,color:T.textSm,margin:"4px 0 8px",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>Total do Envio</p>
-            <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(envio.totalGeral)}</p>
-            <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{envio.qtdNotas} notas</p>
+            <p className="num" style={{fontSize:24,fontWeight:800,color:T.text,margin:0,letterSpacing:"-0.025em"}}>{fmt(metricas.totalGeral)}</p>
+            <p style={{fontSize:11,color:T.textSm,margin:"4px 0 0"}}>{metricas.qtdNotas} notas</p>
           </div>
         </div>
 
@@ -225,7 +229,7 @@ export default function EnvioPublico({ numero, envioRef }) {
             ))}
             <div style={{padding:"14px 18px",background:T.surfaceAlt,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em",color:T.text}}>Total</span>
-              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(envio.totalJogos)}</span>
+              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(metricas.totalJogos)}</span>
             </div>
           </div>
         </>)}
@@ -253,7 +257,7 @@ export default function EnvioPublico({ numero, envioRef }) {
             ))}
             <div style={{padding:"14px 18px",background:T.surfaceAlt,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em",color:T.text}}>Total</span>
-              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(envio.totalMensais)}</span>
+              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(metricas.totalMensais)}</span>
             </div>
           </div>
         </>)}
@@ -281,7 +285,7 @@ export default function EnvioPublico({ numero, envioRef }) {
             ))}
             <div style={{padding:"14px 18px",background:T.surfaceAlt,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.04em",color:T.text}}>Total</span>
-              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(envio.totalLivemode)}</span>
+              <span className="num" style={{fontSize:14,fontWeight:700,color:purple}}>{fmt(metricas.totalLivemode)}</span>
             </div>
           </div>
         </>)}
@@ -302,7 +306,7 @@ export default function EnvioPublico({ numero, envioRef }) {
               Você está prestes a marcar o <b>{envio.nome || `Envio ${envio.numero}`}</b> como pago.
             </p>
             <p style={{margin:"0 0 22px",color:T.textMd,fontSize:13}}>
-              Valor total: <b className="num" style={{color:T.brand,fontWeight:700}}>{fmt(envio.totalGeral)}</b> · {envio.qtdNotas} nota{envio.qtdNotas!==1?"s":""}
+              Valor total: <b className="num" style={{color:T.brand,fontWeight:700}}>{fmt(metricas.totalGeral)}</b> · {metricas.qtdNotas} nota{metricas.qtdNotas!==1?"s":""}
             </p>
             <div style={{marginBottom:22}}>
               <label style={{display:"block",fontSize:10,color:T.textSm,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6,fontWeight:700}}>Seu nome (opcional)</label>

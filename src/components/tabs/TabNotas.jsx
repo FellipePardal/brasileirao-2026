@@ -5,6 +5,7 @@ import { CATS, btnStyle, iSty, RADIUS } from "../../constants";
 import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile, getState, setState as setSupabaseState } from "../../lib/supabase";
 import { usePortalLink } from "../../hooks/usePortalLink";
 import { getOperacionaisPorSubKey, findFornecedorTolerante, emiteNF } from "../../lib/portalLink";
+import { countNotasFiscais, getNotaFiscalScales, groupNotasFiscais, normalizeEnvioMetricas, sumNotasFiscais } from "../../lib/notasFiscais";
 import { Card, PanelTitle, Button, Chip, Segmented, Progress, tableStyles } from "../ui";
 import { Plus, Eye, Trash2, Upload, Copy as CopyIcon, FileText } from "lucide-react";
 
@@ -838,11 +839,24 @@ function RecebidasTab({ notas, addNota, addNotaMensal, jogos, T, submissionsKey 
       else addNota(nota);
     } else {
       const sv = editingId === sub.id ? editServicos : (sub.servicosValores || {});
-      valorNF = Object.values(sv).reduce((s, v) => s + (v || 0), 0);
-      const jogo = divulgados.find(j => j.id === sub.jogoId);
+      const isMultiJogo = Array.isArray(sub.jogoIds) && sub.jogoIds.length > 1;
+      const servicosDetalhe = sub.servicosDetalhe || (isMultiJogo
+        ? Object.fromEntries(Object.entries(sv).map(([k, v]) => [k.includes("_") ? k : `${sub.jogoId}_${k}`, v]))
+        : null);
+      valorNF = servicosDetalhe
+        ? Object.values(servicosDetalhe).reduce((s, v) => s + (v || 0), 0)
+        : Object.values(sv).reduce((s, v) => s + (v || 0), 0);
+      const jogo = divulgados.find(j => j.id === sub.jogoId) || divulgados.find(j => (sub.jogoIds || []).includes(j.id));
       const allServicos = jogo ? extrairServicos(jogo) : [];
-      const servicosKeys = Object.keys(sv).map(sk => `${sub.jogoId}_${sk}`);
-      const servicosLabels = Object.keys(sv).map(sk => {
+      const servicosKeys = servicosDetalhe ? Object.keys(servicosDetalhe) : Object.keys(sv).map(sk => `${sub.jogoId}_${sk}`);
+      const servicosValores = servicosDetalhe
+        ? Object.entries(servicosDetalhe).reduce((acc, [k, v]) => {
+            const subKey = k.split("_").slice(1).join("_");
+            acc[subKey] = (acc[subKey] || 0) + (v || 0);
+            return acc;
+          }, {})
+        : sv;
+      const servicosLabels = sub.servicosLabels || Object.keys(servicosValores).map(sk => {
         const s = allServicos.find(x => x.subKey === sk);
         return s ? s.subLabel : sk;
       });
@@ -850,10 +864,12 @@ function RecebidasTab({ notas, addNota, addNotaMensal, jogos, T, submissionsKey 
       const visitante = jogo?.visitante || sub.jogoLabel?.split(/\s*x\s*/)[1] || "";
       nota = {
         ...sub,
-        servicosValores: sv,
+        servicosValores,
+        ...(servicosDetalhe ? { servicosDetalhe } : {}),
         servicosKeys,
         servicosLabels,
         valorNF,
+        valorFiscalTotal: valorNF,
         tipo: "prevista",
         status: "Conferida",
         codigo: gerarCodigo(sub.rodada, mandante, visitante, valorNF, sub.numeroNF),
@@ -1117,7 +1133,7 @@ function InlineFornecedor({ value, onChange, fornecedores, T }) {
   );
 }
 
-export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario', usarPortal = true, subsExcluirExtra = [] }) {
+export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedores = [], envios = [], setEnvios, fornecedoresJogo = {}, setFornecedoresJogo, setNotasMensais, T, submissionsKey = 'nf_submissions', historicoKey = 'nf_historico', formHash = '#formulario', usarPortal = true, subsExcluirExtra = [], dedupeNotasPorNF = false }) {
   const subsExcluir = subsExcluirExtra.length ? new Set([...SUBS_EXCLUIR, ...subsExcluirExtra]) : SUBS_EXCLUIR;
   const { portal: _portalRaw } = usePortalLink('brasileirao');
   const portal = usarPortal ? _portalRaw : null;
@@ -1220,8 +1236,8 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
 
   const totalPendente  = allServicos.filter(i => i.status === "Pendente").length;
   const totalConferida = allServicos.filter(i => i.status === "Conferida").length;
-  const totalNotas     = notas.length;
-  const totalValor     = notas.reduce((s, n) => s + (n.valorNF || 0), 0);
+  const totalNotas     = countNotasFiscais(notas, { dedupe: dedupeNotasPorNF });
+  const totalValor     = sumNotasFiscais(notas, "valorNF", { dedupe: dedupeNotasPorNF });
   const notasAvulsas   = notas.filter(n => n.tipo === "avulsa").length;
 
   // Recalcula o realizado sempre que as notas mudam
@@ -1229,6 +1245,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
     // Aliases: subKeys virtuais (NF) → subKey financeira (CATS)
     // SNG Host alimenta o bucket "SNG"; SNG Premiere alimenta "SNG Extra".
     const ALIAS_SUBKEY = { sng_host: 'sng', sng_premiere: 'sng_extra' };
+    const nfScales = getNotaFiscalScales(notas, "valorNF", { dedupe: dedupeNotasPorNF });
     setJogos(js => js.map(j => {
       const realizado = {...(j.realizado || {})};
       CATS.forEach(cat => cat.subs.forEach(sub => {
@@ -1240,6 +1257,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
       delete realizado.sng_premiere;
       // Somar valores — usa servicosDetalhe (granular por jogo) se disponível
       notas.forEach(n => {
+        const scale = nfScales[n.id] ?? 1;
         if (n.servicosDetalhe) {
           // Multi-jogo: pegar só as chaves deste jogo
           Object.entries(n.servicosDetalhe).forEach(([k, valor]) => {
@@ -1247,14 +1265,14 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
             if (parseInt(jId) === j.id) {
               const subKey = rest.join("_");
               const finalKey = ALIAS_SUBKEY[subKey] || subKey;
-              realizado[finalKey] = (realizado[finalKey] || 0) + valor;
+              realizado[finalKey] = (realizado[finalKey] || 0) + (valor * scale);
             }
           });
         } else if (n.jogoId === j.id && n.servicosValores) {
           // Formato antigo: jogoId simples
           Object.entries(n.servicosValores).forEach(([subKey, valor]) => {
             const finalKey = ALIAS_SUBKEY[subKey] || subKey;
-            realizado[finalKey] = (realizado[finalKey] || 0) + valor;
+            realizado[finalKey] = (realizado[finalKey] || 0) + (valor * scale);
           });
         }
       });
@@ -1293,15 +1311,11 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
           if (!(e.notasIds || []).includes(id)) return e;
           const notasIds = (e.notasIds || []).filter(nid => nid !== id);
           const notasResumo = (e.notasResumo || []).filter(n => n.id !== id);
-          const totalJogos = notasResumo.reduce((s, n) => s + (n.valorNF || 0), 0);
-          return {
+          return normalizeEnvioMetricas({
             ...e,
             notasIds,
             notasResumo,
-            totalJogos,
-            totalGeral: totalJogos + (e.totalMensais || 0) + (e.totalLivemode || 0),
-            qtdNotas: notasIds.length + (e.mensaisIds || []).length + (e.livemodeIds || []).length,
-          };
+          }, { dedupeNotasPorNF });
         }));
       }
       if (nota) pushHistorico({ ...nota, decisao: "excluida", excluidoEm: new Date().toISOString() }, historicoKey);
@@ -1325,15 +1339,11 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
         if (afetadas.length === 0) return e;
         const notasIds = (e.notasIds || []).filter(id => !idsRodada.has(id));
         const notasResumo = (e.notasResumo || []).filter(n => !idsRodada.has(n.id));
-        const totalJogos = notasResumo.reduce((s, n) => s + (n.valorNF || 0), 0);
-        return {
+        return normalizeEnvioMetricas({
           ...e,
           notasIds,
           notasResumo,
-          totalJogos,
-          totalGeral: totalJogos + (e.totalMensais || 0) + (e.totalLivemode || 0),
-          qtdNotas: notasIds.length + (e.mensaisIds || []).length + (e.livemodeIds || []).length,
-        };
+        }, { dedupeNotasPorNF });
       }));
     }
   };
@@ -1350,17 +1360,17 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
   const resumoFornecedor = useMemo(() => {
     if (filtroFornecedor === "Todos") return null;
     const nfsForn = notas.filter(n => n.fornecedor === filtroFornecedor);
-    const totalGasto = nfsForn.reduce((s, n) => s + (n.valorNF || 0), 0);
+    const totalGasto = sumNotasFiscais(nfsForn, "valorNF", { dedupe: dedupeNotasPorNF });
     const jogosSet = new Set(nfsForn.flatMap(n => n.jogoIds || (n.jogoId ? [n.jogoId] : [])));
     const jogosComNF = jogos.filter(j => jogosSet.has(j.id) && j.mandante !== "A definir");
     const statusMap = {};
-    nfsForn.forEach(n => {
-      const env = envioMap[n.id];
+    groupNotasFiscais(nfsForn, { dedupe: dedupeNotasPorNF }).forEach(([, group]) => {
+      const env = group.some(n => envioMap[n.id]);
       const st = env ? "Enviada" : "Pendente";
       statusMap[st] = (statusMap[st] || 0) + 1;
     });
-    return { total: nfsForn.length, totalGasto, jogos: jogosComNF, status: statusMap };
-  }, [filtroFornecedor, notas, jogos, envioMap]);
+    return { total: countNotasFiscais(nfsForn, { dedupe: dedupeNotasPorNF }), totalGasto, jogos: jogosComNF, status: statusMap };
+  }, [filtroFornecedor, notas, jogos, envioMap, dedupeNotasPorNF]);
 
   const copyPlanilha = () => {
     const header = "Código\tNº NF\tFornecedor\tValor\tEmissão\tEnvio\tPagamento\tJogo\tRodada\tServiços\tTipo\tObs";
@@ -1703,8 +1713,8 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
         )}
 
         <Card T={T}>
-          <PanelTitle T={T} title="Planilha de Notas" subtitle={`${planilhaItens.length} notas`}
-            right={<span style={{fontSize:12,color:T.textMd}}>Total: <b className="num" style={{color:purple}}>{fmt(planilhaItens.reduce((s, n) => s + (n.valorNF || 0), 0))}</b></span>}
+          <PanelTitle T={T} title="Planilha de Notas" subtitle={`${countNotasFiscais(planilhaItens, { dedupe: dedupeNotasPorNF })} notas`}
+            right={<span style={{fontSize:12,color:T.textMd}}>Total: <b className="num" style={{color:purple}}>{fmt(sumNotasFiscais(planilhaItens, "valorNF", { dedupe: dedupeNotasPorNF }))}</b></span>}
           />
           <div style={TS.wrap}>
             <table style={{...TS.table, minWidth:1050}}>
@@ -1771,7 +1781,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                   const pend = rodServicos.filter(i => i.status === "Pendente").length;
                   const conf = rodServicos.filter(i => i.status === "Conferida").length;
                   const rodNotas = notas.filter(n => n.rodada === rod);
-                  const rodValor = rodNotas.reduce((s, n) => s + (n.valorNF || 0), 0);
+                  const rodValor = sumNotasFiscais(rodNotas, "valorNF", { dedupe: dedupeNotasPorNF });
                   const pct = tot ? (conf / tot * 100) : 0;
                   return (
                     <tr key={rod} style={TS.tr}>
@@ -1779,7 +1789,7 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
                       <td className="num" style={TS.tdNum}>{tot}</td>
                       <td className="num" style={{...TS.tdNum, color:pend>0?T.warning:T.textSm}}>{pend}</td>
                       <td className="num" style={{...TS.tdNum, color:conf>0?T.brand:T.textSm}}>{conf}</td>
-                      <td className="num" style={TS.tdNum}>{rodNotas.length}</td>
+                      <td className="num" style={TS.tdNum}>{countNotasFiscais(rodNotas, { dedupe: dedupeNotasPorNF })}</td>
                       <td className="num" style={{...TS.tdNum, color:purple, fontWeight:700}}>{fmt(rodValor)}</td>
                       <td style={{padding:"13px 16px", textAlign:"right"}}>
                         <div style={{display:"flex",alignItems:"center",gap:10,justifyContent:"flex-end"}}>

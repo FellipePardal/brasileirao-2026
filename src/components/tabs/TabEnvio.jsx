@@ -3,6 +3,7 @@ import { KPI, Pill } from "../shared";
 import { fmt, subTotal } from "../../utils";
 import { CATS, btnStyle, iSty, RADIUS } from "../../constants";
 import { getNFFile } from "../../lib/supabase";
+import { countNotasFiscais, getEnvioMetricas, normalizeEnvioMetricas, sumNotasFiscais } from "../../lib/notasFiscais";
 import { Card, PanelTitle, Button, Chip, tableStyles } from "../ui";
 import { Plus, ArrowLeft, CheckCircle2, Clock, Eye, Trash2, Share2, ExternalLink, Download, Send, Package, Edit2, PlusCircle, X } from "lucide-react";
 
@@ -13,7 +14,7 @@ const makePublicToken = () => {
   return `envio_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 };
 
-export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [], servicos, envios, setEnvios, T, enviosKey = "envios" }) {
+export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [], servicos, envios, setEnvios, T, enviosKey = "envios", dedupeNotasPorNF = false }) {
   const [view, setView] = useState("lista");
   const [envioDetalheId, setEnvioDetalheId] = useState(null);
 
@@ -70,7 +71,7 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const selJogosArr = notas.filter(n => selJogosNFs.has(n.id));
   const selMensaisArr = notasMensais.filter(n => selMensaisNFs.has(n.id));
   const selLivemodeArr = notasLivemode.filter(n => selLivemodeNFs.has(n.id));
-  const totalSelValor = selJogosArr.reduce((s, n) => s + (n.valorNF||0), 0) + selMensaisArr.reduce((s, n) => s + (n.valor||0), 0) + selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
+  const totalSelValor = sumNotasFiscais(selJogosArr, "valorNF", { dedupe: dedupeNotasPorNF }) + selMensaisArr.reduce((s, n) => s + (n.valor||0), 0) + selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
   const proximoNumeroEnvio = nextEnvioNumero(envios);
   const envioPublicRef = envio => `${enviosKey}:${envio.publicToken || `id:${envio.id}`}`;
   const envioPublicHash = envio => `#envio/${encodeURIComponent(envioPublicRef(envio))}`;
@@ -85,7 +86,7 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
     if (selJogosNFs.size === 0 && selMensaisNFs.size === 0 && selLivemodeNFs.size === 0) return;
     const numero = proximoNumeroEnvio;
     const totalLivemode = selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
-    const novo = {
+    const novo = normalizeEnvioMetricas({
       id: Date.now(),
       numero,
       publicToken: makePublicToken(),
@@ -99,12 +100,12 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
       notasResumo: selJogosArr.map(n => ({id:n.id,codigo:n.codigo,fornecedor:n.fornecedor,valorNF:n.valorNF,numeroNF:n.numeroNF,jogoLabel:n.jogoLabel,rodada:n.rodada,servicosLabels:n.servicosLabels,dataEmissao:n.dataEmissao,dataPagamento,hasFile:n.hasFile})),
       mensaisResumo: selMensaisArr.map(n => ({id:n.id,fornecedor:n.fornecedor,valor:n.valor,numeroNF:n.numeroNF,categoria:n.categoria,mesLabel:n.mesLabel,dataEmissao:n.dataEmissao,dataPagamento,hasFile:n.hasFile})),
       livemodeResumo: selLivemodeArr.map(n => ({id:n.id,fornecedor:n.fornecedor||"Livemode",valor:n.valor,numeroNF:n.numeroNF,rodada:n.rodada,rodadas:n.rodadas,rodadasLabel:n.rodadasLabel,servicosLabels:n.servicosLabels,dataEmissao:n.dataEmissao,dataPagamento,hasFile:n.hasFile})),
-      totalJogos: selJogosArr.reduce((s, n) => s + (n.valorNF||0), 0),
-      totalMensais: selMensaisArr.reduce((s, n) => s + (n.valor||0), 0),
+      totalJogos: 0,
+      totalMensais: 0,
       totalLivemode,
       totalGeral: totalSelValor,
       qtdNotas: selJogosNFs.size + selMensaisNFs.size + selLivemodeNFs.size,
-    };
+    }, { dedupeNotasPorNF });
     setEnvios(ev => [...ev, novo]);
     setView("lista");
     setSelJogosNFs(new Set());
@@ -168,18 +169,11 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
       const resumoCampo = tipo === "jogo" ? "notasResumo" : tipo === "mensal" ? "mensaisResumo" : "livemodeResumo";
       const novasIds = (e[idsCampo]||[]).filter(id => id !== notaId);
       const novoResumo = (e[resumoCampo]||[]).filter(n => n.id !== notaId);
-      const totalJogos = tipo === "jogo" ? novoResumo.reduce((s, n) => s + (n.valorNF||0), 0) : (e.totalJogos||0);
-      const totalMensais = tipo === "mensal" ? novoResumo.reduce((s, n) => s + (n.valor||0), 0) : (e.totalMensais||0);
-      const totalLivemode = tipo === "livemode" ? novoResumo.reduce((s, n) => s + (n.valor||0), 0) : (e.totalLivemode||0);
-      const qtdNotas = (tipo==="jogo"?novasIds:(e.notasIds||[])).length + (tipo==="mensal"?novasIds:(e.mensaisIds||[])).length + (tipo==="livemode"?novasIds:(e.livemodeIds||[])).length;
-      return {
+      return normalizeEnvioMetricas({
         ...e,
         [idsCampo]: novasIds,
         [resumoCampo]: novoResumo,
-        totalJogos, totalMensais, totalLivemode,
-        totalGeral: totalJogos + totalMensais + totalLivemode,
-        qtdNotas,
-      };
+      }, { dedupeNotasPorNF });
     }));
   };
 
@@ -202,10 +196,7 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
       const notasResumo = [...(e.notasResumo||[]), ...novosJogos.map(n => ({id:n.id,codigo:n.codigo,fornecedor:n.fornecedor,valorNF:n.valorNF,numeroNF:n.numeroNF,jogoLabel:n.jogoLabel,rodada:n.rodada,servicosLabels:n.servicosLabels,dataEmissao:n.dataEmissao,dataPagamento:e.dataPagamento,hasFile:n.hasFile}))];
       const mensaisResumo = [...(e.mensaisResumo||[]), ...novosMensais.map(n => ({id:n.id,fornecedor:n.fornecedor,valor:n.valor,numeroNF:n.numeroNF,categoria:n.categoria,mesLabel:n.mesLabel,dataEmissao:n.dataEmissao,dataPagamento:e.dataPagamento,hasFile:n.hasFile}))];
       const livemodeResumo = [...(e.livemodeResumo||[]), ...novosLivemode.map(n => ({id:n.id,fornecedor:n.fornecedor||"Livemode",valor:n.valor,numeroNF:n.numeroNF,rodada:n.rodada,rodadas:n.rodadas,rodadasLabel:n.rodadasLabel,servicosLabels:n.servicosLabels,dataEmissao:n.dataEmissao,dataPagamento:e.dataPagamento,hasFile:n.hasFile}))];
-      const totalJogos = notasResumo.reduce((s, n) => s + (n.valorNF||0), 0);
-      const totalMensais = mensaisResumo.reduce((s, n) => s + (n.valor||0), 0);
-      const totalLivemode = livemodeResumo.reduce((s, n) => s + (n.valor||0), 0);
-      return {...e, notasIds, mensaisIds, livemodeIds, notasResumo, mensaisResumo, livemodeResumo, totalJogos, totalMensais, totalLivemode, totalGeral: totalJogos + totalMensais + totalLivemode, qtdNotas: notasIds.length + mensaisIds.length + livemodeIds.length};
+      return normalizeEnvioMetricas({...e, notasIds, mensaisIds, livemodeIds, notasResumo, mensaisResumo, livemodeResumo}, { dedupeNotasPorNF });
     }));
 
     setAddingNotas(false);
@@ -217,20 +208,22 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const envioLabel = e => e?.nome || `Envio ${e?.numero}`;
 
   const totalEnvios = envios.length;
-  const totalNFsEnviadas = envios.reduce((s, e) => s + e.qtdNotas, 0);
-  const totalValorEnviado = envios.reduce((s, e) => s + e.totalGeral, 0);
-  const totalPago = envios.filter(e => e.pago).reduce((s, e) => s + e.totalGeral, 0);
-  const totalPendentePgto = envios.filter(e => !e.pago).reduce((s, e) => s + e.totalGeral, 0);
+  const metricasEnvios = envios.map(e => ({ envio: e, ...getEnvioMetricas(e, { dedupeNotasPorNF }) }));
+  const totalNFsEnviadas = metricasEnvios.reduce((s, e) => s + e.qtdNotas, 0);
+  const totalValorEnviado = metricasEnvios.reduce((s, e) => s + e.totalGeral, 0);
+  const totalPago = metricasEnvios.filter(e => e.envio.pago).reduce((s, e) => s + e.totalGeral, 0);
+  const totalPendentePgto = metricasEnvios.filter(e => !e.envio.pago).reduce((s, e) => s + e.totalGeral, 0);
 
   // Derivado direto do estado — sempre atualizado
   const envioDetalhe = envioDetalheId ? envios.find(e => e.id === envioDetalheId) : null;
+  const envioDetalheMetricas = envioDetalhe ? getEnvioMetricas(envioDetalhe, { dedupeNotasPorNF }) : null;
 
   return (
     <div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:16}}>
         <KPI label="Total Envios" value={String(totalEnvios)} sub="Pacotes enviados" color={purple} T={T}/>
         <KPI label="NFs Enviadas" value={String(totalNFsEnviadas)} sub="Jogos + Mensais" color={T.brand} T={T}/>
-        <KPI label="NFs Pendentes" value={String(nfsDisponiveis.length + mensaisDisponiveis.length)} sub="Não enviadas" color={T.warning} T={T}/>
+        <KPI label="NFs Pendentes" value={String(countNotasFiscais(nfsDisponiveis, { dedupe: dedupeNotasPorNF }) + mensaisDisponiveis.length)} sub="Não enviadas" color={T.warning} T={T}/>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:16,marginBottom:24}}>
         <KPI label="Valor Enviado" value={fmt(totalValorEnviado)} sub="Total acumulado" color={cyan} T={T}/>
@@ -257,7 +250,9 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
           </Card>
         )}
 
-        {[...envios].reverse().map(envio => (
+        {[...envios].reverse().map(envio => {
+          const metricas = getEnvioMetricas(envio, { dedupeNotasPorNF });
+          return (
           <Card key={envio.id} T={T} style={{marginBottom:12}} accent={envio.pago?T.brand:T.danger}>
             <div style={{padding:"18px 22px"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,marginBottom:12}}>
@@ -268,14 +263,14 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
                     {envio.pago?"Pago":"Aguardando"}
                   </span>
                   <span className="num" style={{color:T.textSm,fontSize:12}}>{new Date(envio.criadoEm).toLocaleDateString("pt-BR")}</span>
-                  <span style={{color:T.textMd,fontSize:12}}>{envio.qtdNotas} nota{envio.qtdNotas!==1?"s":""}</span>
+                  <span style={{color:T.textMd,fontSize:12}}>{metricas.qtdNotas} nota{metricas.qtdNotas!==1?"s":""}</span>
                 </div>
-                <span className="num" style={{color:cyan,fontWeight:800,fontSize:18,letterSpacing:"-0.02em"}}>{fmt(envio.totalGeral)}</span>
+                <span className="num" style={{color:cyan,fontWeight:800,fontSize:18,letterSpacing:"-0.02em"}}>{fmt(metricas.totalGeral)}</span>
               </div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,alignItems:"center"}}>
-                {envio.totalJogos > 0 && <Pill label={`Jogos: ${fmt(envio.totalJogos)}`} color={T.brand}/>}
-                {envio.totalMensais > 0 && <Pill label={`Mensais: ${fmt(envio.totalMensais)}`} color={cyan}/>}
-                {(envio.totalLivemode||0) > 0 && <Pill label={`Livemode: ${fmt(envio.totalLivemode)}`} color={teal}/>}
+                {metricas.totalJogos > 0 && <Pill label={`Jogos: ${fmt(metricas.totalJogos)}`} color={T.brand}/>}
+                {metricas.totalMensais > 0 && <Pill label={`Mensais: ${fmt(metricas.totalMensais)}`} color={cyan}/>}
+                {metricas.totalLivemode > 0 && <Pill label={`Livemode: ${fmt(metricas.totalLivemode)}`} color={teal}/>}
                 {envio.dataPagamento && <Pill label={`Pgto: ${envio.dataPagamento}`} color={purple}/>}
                 {envio.obs && <span style={{color:T.textSm,fontSize:11}}>Obs: {envio.obs}</span>}
               </div>
@@ -290,7 +285,7 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
               </div>
             </div>
           </Card>
-        ))}
+        );})}
       </>)}
 
       {/* ── NOVO ENVIO ── */}
@@ -525,10 +520,10 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
         )}
 
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16,marginBottom:20}}>
-          <KPI label="NFs de Jogos" value={fmt(envioDetalhe.totalJogos)} sub={`${(envioDetalhe.notasResumo||[]).length} notas`} color={T.brand} T={T}/>
-          <KPI label="NFs Mensais" value={fmt(envioDetalhe.totalMensais)} sub={`${(envioDetalhe.mensaisResumo||[]).length} notas`} color={cyan} T={T}/>
-          <KPI label="NFs Livemode" value={fmt(envioDetalhe.totalLivemode||0)} sub={`${(envioDetalhe.livemodeResumo||[]).length} notas`} color={teal} T={T}/>
-          <KPI label="Total Envio" value={fmt(envioDetalhe.totalGeral)} sub={`${envioDetalhe.qtdNotas} notas`} color={purple} T={T}/>
+          <KPI label="NFs de Jogos" value={fmt(envioDetalheMetricas.totalJogos)} sub={`${countNotasFiscais(envioDetalhe.notasResumo||[], { dedupe: dedupeNotasPorNF })} notas`} color={T.brand} T={T}/>
+          <KPI label="NFs Mensais" value={fmt(envioDetalheMetricas.totalMensais)} sub={`${(envioDetalhe.mensaisResumo||[]).length} notas`} color={cyan} T={T}/>
+          <KPI label="NFs Livemode" value={fmt(envioDetalheMetricas.totalLivemode)} sub={`${(envioDetalhe.livemodeResumo||[]).length} notas`} color={teal} T={T}/>
+          <KPI label="Total Envio" value={fmt(envioDetalheMetricas.totalGeral)} sub={`${envioDetalheMetricas.qtdNotas} notas`} color={purple} T={T}/>
         </div>
 
         {envioDetalhe.obs && (
