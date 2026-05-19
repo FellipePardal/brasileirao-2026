@@ -8,7 +8,7 @@ import { Card, Stat, Button, Badge } from "./ui";
 import {
   Trophy, Calendar, Building2, Sun, Moon,
   ArrowRight, Lock, Activity, Handshake, Globe2,
-  Plus, Trash2, LogOut,
+  Plus, Trash2, LogOut, Users,
 } from "lucide-react";
 
 
@@ -262,6 +262,11 @@ export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, cus
             <Activity size={11} strokeWidth={2.5} />
             Temporada 2026
           </Badge>
+          {role === 'admin' && (
+            <Button T={T} variant="secondary" size="sm" icon={Users} onClick={() => onEnter('admin-usuarios')}>
+              Usuários
+            </Button>
+          )}
           <Button
             T={T}
             variant="secondary"
