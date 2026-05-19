@@ -5,7 +5,7 @@ import { CATS, btnStyle, iSty, RADIUS } from "../../constants";
 import { getNFFile } from "../../lib/supabase";
 import { countNotasFiscais, getEnvioMetricas, normalizeEnvioMetricas, sumNotasFiscais } from "../../lib/notasFiscais";
 import { Card, PanelTitle, Button, Chip, tableStyles } from "../ui";
-import { Plus, ArrowLeft, CheckCircle2, Clock, Eye, Trash2, Share2, ExternalLink, Download, Send, Package, Edit2, PlusCircle, X } from "lucide-react";
+import { Plus, ArrowLeft, CheckCircle2, Clock, Eye, Trash2, Share2, ExternalLink, Download, Send, Package, Edit2, PlusCircle, X, MessageSquare } from "lucide-react";
 
 const catTotal = (subs, cat) => cat.subs.reduce((s, sub) => s + (subs?.[sub.key]||0), 0);
 const nextEnvioNumero = envios => Math.max(0, ...(envios || []).map(e => Number(e.numero) || 0)) + 1;
@@ -47,6 +47,21 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const [addSelJogos, setAddSelJogos] = useState(new Set());
   const [addSelMensais, setAddSelMensais] = useState(new Set());
   const [addSelLivemode, setAddSelLivemode] = useState(new Set());
+
+  // Anotações internas por envio
+  const [novoComentario, setNovoComentario] = useState("");
+
+  const adicionarComentario = (envioId) => {
+    const texto = novoComentario.trim();
+    if (!texto) return;
+    const comentario = { id: Date.now(), texto, criadoEm: new Date().toISOString() };
+    setEnvios(ev => ev.map(e => e.id !== envioId ? e : { ...e, anotacoes: [...(e.anotacoes || []), comentario] }));
+    setNovoComentario("");
+  };
+
+  const excluirComentario = (envioId, comentarioId) => {
+    setEnvios(ev => ev.map(e => e.id !== envioId ? e : { ...e, anotacoes: (e.anotacoes || []).filter(c => c.id !== comentarioId) }));
+  };
 
   const IS = iSty(T);
   const TS = tableStyles(T);
@@ -588,6 +603,48 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
             </div>
           </Card>
         )}
+
+        {/* ── ANOTAÇÕES INTERNAS ── */}
+        <Card T={T} style={{marginBottom:16}} accent={"#6366f1"}>
+          <PanelTitle T={T} title="Anotações Internas" color={"#6366f1"}
+            right={<span style={{fontSize:11,color:T.textSm,display:"flex",alignItems:"center",gap:5}}><MessageSquare size={12}/> visível só para você</span>}
+          />
+          <div style={{padding:"0 20px 16px"}}>
+            {(envioDetalhe.anotacoes || []).length === 0 && (
+              <p style={{color:T.textSm,fontSize:12,margin:"8px 0 12px",fontStyle:"italic"}}>Nenhuma anotação ainda.</p>
+            )}
+            {(envioDetalhe.anotacoes || []).map(c => (
+              <div key={c.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 0",borderBottom:`1px solid ${T.border}`}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 4px",fontSize:13,color:T.text,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{c.texto}</p>
+                  <span style={{fontSize:10,color:T.textSm}}>
+                    {new Date(c.criadoEm).toLocaleDateString("pt-BR")} às {new Date(c.criadoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
+                  </span>
+                </div>
+                <button onClick={() => excluirComentario(envioDetalhe.id, c.id)}
+                  style={{background:"transparent",border:"none",cursor:"pointer",color:T.textSm,padding:4,borderRadius:4,display:"flex",alignItems:"center",flexShrink:0}}
+                  title="Remover anotação">
+                  <X size={13}/>
+                </button>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:12,alignItems:"flex-end"}}>
+              <textarea
+                value={novoComentario}
+                onChange={e => setNovoComentario(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) adicionarComentario(envioDetalhe.id); }}
+                placeholder="Escreva uma anotação… (Ctrl+Enter para salvar)"
+                rows={2}
+                style={{...IS, flex:1, resize:"vertical", minHeight:60, lineHeight:1.5, fontSize:13}}
+              />
+              <Button T={T} variant="primary" size="md" icon={Send}
+                onClick={() => adicionarComentario(envioDetalhe.id)}
+                disabled={!novoComentario.trim()}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </Card>
 
         {(envioDetalhe.notasResumo||[]).length > 0 && (
           <Card T={T} style={{marginBottom:16}}>
