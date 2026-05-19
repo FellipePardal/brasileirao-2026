@@ -756,15 +756,16 @@ function LoginGate({ T, authError, setAuthError }) {
     // On success, onAuthStateChange in App() handles state update.
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setErro(""); setAuthError("");
-    supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: window.location.origin,
         queryParams: { hd: 'livemode.com' },
       },
     });
+    if (error) setErro(error.message);
   };
 
   const anyError = authError || erro;
