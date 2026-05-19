@@ -6,7 +6,7 @@ import { KPI, Pill, CustomTooltip } from "./components/shared";
 import { Card, SectionHeader, Stat, Badge, Progress, IconButton } from "./components/ui";
 import {
   LayoutDashboard, FileText, Users, ClipboardList,
-  ArrowLeft, Eye, EyeOff, Sun, Moon, Lock,
+  ArrowLeft, Eye, EyeOff, Sun, Moon, Lock, LogOut,
   Wallet, TrendingUp, Activity, PiggyBank, Truck, Target,
 } from "lucide-react";
 import Home             from "./components/Home";
@@ -29,7 +29,7 @@ import { COTACAO_INIT } from "./data/negociacoes";
 
 
 // ─── BRASILEIRÃO ──────────────────────────────────────────────────────────────
-function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
+function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode, role = 'admin', onSignOut }) {
   const [jogos, setJogosRaw]       = useState(ALL_JOGOS);
   const [servicos, setServicosRaw] = useState(SERVICOS_INIT);
   const [notas, setNotasRaw]               = useState([]);
@@ -279,8 +279,8 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
 
   const RESUMO_CATS = [...varCalc, ...fixosCalc, ...outrosMensaisCalc];
 
-  const [setor,           setSetor]           = useState("orcamento");
-  const [tab,             setTab]             = useState("dashboard");
+  const [setor,           setSetor]           = useState(() => role === 'visualizador' ? "notas" : "orcamento");
+  const [tab,             setTab]             = useState(() => role === 'visualizador' ? "notas fiscais" : "dashboard");
   const [showNovo,        setNovo]            = useState(false);
   const [novoRapido,      setNovoRapido]      = useState(null);
   const [jogoEdit,        setJogoEdit]        = useState(null);
@@ -392,12 +392,16 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
     </div>
   );
 
-  const SETORES = [
+  const SETORES_ALL = [
     {k:"orcamento",    l:"Orçamento",            icon:LayoutDashboard},
     {k:"notas",        l:"Notas Fiscais",        icon:FileText},
     {k:"logistica",    l:"Logística",            icon:Truck},
     {k:"fornecedores", l:"Hub de Fornecedores →", icon:Users},
     {k:"relatorio",    l:"Relatório",            icon:ClipboardList},
+  ];
+  const SETORES = role === 'admin' ? SETORES_ALL : [
+    {k:"notas",     l:"Notas Fiscais", icon:FileText},
+    {k:"relatorio", l:"Relatório",     icon:ClipboardList},
   ];
 
   const setorAtual = SETORES.find(s => s.k === setor);
@@ -455,6 +459,7 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
             onClick={()=>setDarkMode(d=>!d)}
             size={40} T={T}
           />
+          <IconButton icon={LogOut} title="Sair" onClick={onSignOut} size={40} T={T}/>
         </div>
       </aside>
 
@@ -686,8 +691,8 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
 
       </div>
 
-      {showNovo    && <NovoJogoModal   onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
-      {novoRapido  && <NovoRapidoModal cenario={novoRapido} jogos={jogos} onSave={addJogo} onClose={()=>setNovoRapido(null)} T={T}/>}
+      {role === 'admin' && showNovo    && <NovoJogoModal   onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
+      {role === 'admin' && novoRapido  && <NovoRapidoModal cenario={novoRapido} jogos={jogos} onSave={addJogo} onClose={()=>setNovoRapido(null)} T={T}/>}
       {jogoEdit    && <NovoJogoModal   jogo={jogoEdit} onSave={handleEditSave} onClose={()=>setJogoEdit(null)} T={T}/>}
 
       </div>{/* /Main */}
@@ -696,22 +701,59 @@ function Brasileirao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
 }
 
 // ─── TELA DE ACESSO ──────────────────────────────────────────────────────────
-const LS_AUTH = "ffu_auth_v1";
-const ACCESS_PIN = "2026hub";
+function LoadingScreen({ T }) {
+  return (
+    <div style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <p style={{color:T.textMd,fontSize:14}}>Carregando...</p>
+    </div>
+  );
+}
 
-function LoginGate({ onAuth, T }) {
-  const [pin, setPin] = useState("");
-  const [erro, setErro] = useState(false);
+function FornecedorPage({ T, onSignOut }) {
+  return (
+    <div className="page-enter" style={{minHeight:"100vh",background:T.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Poppins',sans-serif"}}>
+      <div style={{width:"100%",maxWidth:440,padding:32,textAlign:"center"}}>
+        <div style={{ margin:"0 auto 24px", display:"flex", justifyContent:"center" }}>
+          <LivemodeLogo size={56} radius={12}/>
+        </div>
+        <h1 style={{fontFamily:FONT.display,fontSize:24,fontWeight:700,color:T.text,margin:"0 0 8px",letterSpacing:"-0.005em"}}>Formulário de Fornecedor</h1>
+        <p style={{color:T.textMd,fontSize:13,margin:"0 0 28px"}}>Seu acesso é ao formulário externo de cadastro.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <a href="#formulario" style={{
+            display:"block",background:T.brand||"#65B32E",color:"#fff",border:"none",borderRadius:7,
+            padding:"10px 16px",fontSize:13,fontWeight:500,fontFamily:"'Poppins',sans-serif",textDecoration:"none",
+          }}>Formulário — Brasileirão</a>
+          <a href="#formulario-paulistao" style={{
+            display:"block",background:T.surface||T.card,color:T.text,
+            border:`1px solid ${T.border}`,borderRadius:7,
+            padding:"10px 16px",fontSize:13,fontWeight:500,fontFamily:"'Poppins',sans-serif",textDecoration:"none",
+          }}>Formulário — Paulistão F</a>
+        </div>
+        <button onClick={onSignOut} style={{
+          marginTop:24,background:"transparent",border:`1px solid ${T.border}`,
+          color:T.textMd,borderRadius:7,padding:"8px 16px",fontSize:12,cursor:"pointer",fontFamily:"'Poppins',sans-serif",
+        }}>Sair</button>
+      </div>
+    </div>
+  );
+}
 
-  const handleSubmit = e => {
+function LoginGate({ T }) {
+  const [email, setEmail]     = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro]       = useState("");
+
+  const handleSubmit = async e => {
     e.preventDefault();
-    if (pin === ACCESS_PIN) {
-      lsSet(LS_AUTH, true);
-      onAuth();
-    } else {
-      setErro(true);
-      setTimeout(() => setErro(false), 2000);
+    setLoading(true);
+    setErro("");
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setErro(error.message || "Credenciais inválidas");
+      setLoading(false);
     }
+    // On success, onAuthStateChange in App() handles state update.
   };
 
   return (
@@ -720,31 +762,46 @@ function LoginGate({ onAuth, T }) {
         <div style={{ margin:"0 auto 24px", display:"flex", justifyContent:"center" }}>
           <LivemodeLogo size={56} radius={12}/>
         </div>
-        <h1 style={{textAlign:"center",fontFamily: FONT.display,fontSize:26,fontWeight:700,color:T.text,margin:"0 0 6px",letterSpacing:"-0.005em"}}>HUB FINANCEIRO</h1>
-        <p style={{textAlign:"center",color:T.textMd,fontSize:13,margin:"0 0 28px"}}>Acesso restrito — insira o código de acesso</p>
+        <h1 style={{textAlign:"center",fontFamily:FONT.display,fontSize:26,fontWeight:700,color:T.text,margin:"0 0 6px",letterSpacing:"-0.005em"}}>HUB FINANCEIRO</h1>
+        <p style={{textAlign:"center",color:T.textMd,fontSize:13,margin:"0 0 28px"}}>Acesso restrito — faça login com seu e-mail</p>
         <form onSubmit={handleSubmit}>
           <input
-            type="password"
-            value={pin}
-            onChange={e => setPin(e.target.value)}
-            placeholder="Código de acesso"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="E-mail"
             autoFocus
+            required
+            style={{
+              width:"100%",boxSizing:"border-box",marginBottom:10,
+              background:T.surface||T.card,border:`1px solid ${T.borderStrong||T.muted||T.border}`,
+              borderRadius:8,padding:"12px 16px",fontSize:14,color:T.text,
+              fontFamily:"'Poppins',sans-serif",
+            }}
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Senha"
+            required
             style={{
               width:"100%",boxSizing:"border-box",
-              background:T.surface||T.card,border:`1px solid ${erro ? (T.danger||"#DC2626") : T.borderStrong||T.muted}`,
-              borderRadius:8,padding:"12px 16px",fontSize:15,color:T.text,
-              fontFamily:"'Poppins',sans-serif",textAlign:"center",letterSpacing:"0.1em",
+              background:T.surface||T.card,border:`1px solid ${erro ? (T.danger||"#DC2626") : T.borderStrong||T.muted||T.border}`,
+              borderRadius:8,padding:"12px 16px",fontSize:14,color:T.text,
+              fontFamily:"'Poppins',sans-serif",
               transition:"border-color 0.2s",
             }}
           />
-          {erro && <p style={{color:T.danger||"#DC2626",fontSize:12,textAlign:"center",margin:"8px 0 0",fontWeight:500}}>Código incorreto</p>}
-          <button type="submit" style={{
+          {erro && <p style={{color:T.danger||"#DC2626",fontSize:12,textAlign:"center",margin:"8px 0 0",fontWeight:500}}>{erro}</p>}
+          <button type="submit" disabled={loading} style={{
             width:"100%",marginTop:16,
             background: T.brand || "#65B32E",
             color:"#fff",border:"none",borderRadius:7,padding:"10px",height:38,
-            cursor:"pointer",fontWeight:500,fontSize:13,fontFamily: "'Poppins',sans-serif",
+            cursor:loading?"not-allowed":"pointer",fontWeight:500,fontSize:13,fontFamily:"'Poppins',sans-serif",
+            opacity:loading?0.7:1,
           }}>
-            Entrar
+            {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
         <p style={{textAlign:"center",color:T.textSm,fontSize:10,margin:"24px 0 0",letterSpacing:"0.08em",textTransform:"uppercase"}}>
@@ -771,20 +828,46 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => lsGet(LS_DARK, true));
   const [pagina,   setPagina]   = useState("home");
   const [hubFiltro, setHubFiltro] = useState("todos"); // filtro pré-aplicado ao abrir o Hub de Fornecedores
-  const [authed,   setAuthed]   = useState(() => lsGet(LS_AUTH, false));
+  const [user,        setUser]        = useState(null);
+  const [role,        setRole]        = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [customCampeonatos, setCustomCampeonatos] = useState([]);
   const [showNovoCampModal, setShowNovoCampModal] = useState(false);
   const T = darkMode ? DARK : LIGHT;
 
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        setUser(session.user);
+        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+        setRole(data?.role ?? null);
+      }
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+        setRole(data?.role ?? null);
+      } else {
+        setUser(null);
+        setRole(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signOut = async () => { await supabase.auth.signOut(); };
+
   // Carrega o registry de campeonatos custom uma vez ao logar.
   useEffect(() => {
-    if (!authed) return;
+    if (!user) return;
     let mounted = true;
     getStateSb(REGISTRY_KEY).then(arr => {
       if (mounted && Array.isArray(arr)) setCustomCampeonatos(arr);
     });
     return () => { mounted = false; };
-  }, [authed]);
+  }, [user]);
 
   const criarCampeonato = async ({ config, jogos, servicos }) => {
     // 1) Persiste estado inicial dos buckets do novo campeonato
@@ -835,20 +918,29 @@ export default function App() {
   const tabelaMatch = window.location.hash.match(/^#tabela\/([0-9a-fA-F-]+)$/);
   if (tabelaMatch) return <TabelaPrecoPublica token={tabelaMatch[1]}/>;
 
-  // Tela de login para o HUB
-  if (!authed) return <LoginGate onAuth={() => setAuthed(true)} T={T}/>;
+  // Auth loading
+  if (authLoading) return <LoadingScreen T={T}/>;
 
-  if(pagina==="brasileirao-2026") return <Brasileirao onBack={()=>setPagina("home")} onOpenHub={abrirHubFornecedores} T={T} darkMode={darkMode} setDarkMode={toggleDark}/>;
-  if(pagina==="paulistao-feminino-2026") return <Paulistao onBack={()=>setPagina("home")} onOpenHub={abrirHubFornecedores} T={T} darkMode={darkMode} setDarkMode={toggleDark}/>;
-  if(pagina?.startsWith("custom:")) {
-    const id = pagina.slice(7);
+  // Tela de login para o HUB
+  if (!user) return <LoginGate T={T}/>;
+
+  // Fornecedor — só acessa formulário externo
+  if (role === 'fornecedor') return <FornecedorPage T={T} onSignOut={signOut}/>;
+
+  // Visualizador não acessa hub-fornecedores
+  const paginaEfetiva = (role === 'visualizador' && pagina === 'hub-fornecedores') ? 'home' : pagina;
+
+  if(paginaEfetiva==="brasileirao-2026") return <Brasileirao onBack={()=>setPagina("home")} onOpenHub={abrirHubFornecedores} T={T} darkMode={darkMode} setDarkMode={toggleDark} role={role} onSignOut={signOut}/>;
+  if(paginaEfetiva==="paulistao-feminino-2026") return <Paulistao onBack={()=>setPagina("home")} onOpenHub={abrirHubFornecedores} T={T} darkMode={darkMode} setDarkMode={toggleDark} role={role} onSignOut={signOut}/>;
+  if(paginaEfetiva?.startsWith("custom:")) {
+    const id = paginaEfetiva.slice(7);
     const config = customCampeonatos.find(c => c.id === id);
     if (config) return <CampeonatoCustom config={config} onBack={()=>setPagina("home")} onOpenHub={abrirHubFornecedores} T={T} darkMode={darkMode} setDarkMode={toggleDark}/>;
     // Config não encontrado (ex: registry ainda carregando após reload). Volta ao home.
     setPagina("home");
     return null;
   }
-  if(pagina==="hub-fornecedores") return <HubFornecedores onBack={()=>setPagina("home")} filtroInicial={hubFiltro} T={T} darkMode={darkMode} setDarkMode={toggleDark}/>;
+  if(paginaEfetiva==="hub-fornecedores") return <HubFornecedores onBack={()=>setPagina("home")} filtroInicial={hubFiltro} T={T} darkMode={darkMode} setDarkMode={toggleDark}/>;
   return (
     <>
       <Home
@@ -856,10 +948,12 @@ export default function App() {
         onOpenHub={abrirHubFornecedores}
         T={T} darkMode={darkMode} setDarkMode={toggleDark}
         customCampeonatos={customCampeonatos}
-        onCriarCampeonato={()=>setShowNovoCampModal(true)}
-        onExcluirCampeonato={excluirCampeonato}
+        role={role}
+        onSignOut={signOut}
+        onCriarCampeonato={role === 'admin' ? ()=>setShowNovoCampModal(true) : undefined}
+        onExcluirCampeonato={role === 'admin' ? excluirCampeonato : undefined}
       />
-      {showNovoCampModal && (
+      {role === 'admin' && showNovoCampModal && (
         <NovoCampeonatoModal
           T={T}
           onClose={()=>setShowNovoCampModal(false)}

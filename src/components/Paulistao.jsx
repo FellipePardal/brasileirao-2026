@@ -5,7 +5,7 @@ import { Pill } from "./shared";
 import { Card, SectionHeader, Stat, Badge, Progress, IconButton } from "./ui";
 import {
   LayoutDashboard, FileText, Users, ClipboardList,
-  ArrowLeft, Eye, EyeOff, Sun, Moon,
+  ArrowLeft, Eye, EyeOff, Sun, Moon, LogOut,
   Wallet, TrendingUp, Activity, PiggyBank, Truck, Target,
 } from "lucide-react";
 import TabJogosPaulistao  from "./tabs/TabJogosPaulistao";
@@ -42,7 +42,7 @@ const K = {
   eventos_log:      "paulistao_eventos_log",
 };
 
-export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode }) {
+export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode, role = 'admin', onSignOut }) {
   const [jogos, setJogosRaw]                       = useState(PAULISTAO_JOGOS_INIT);
   const [servicos, setServicosRaw]                 = useState(PAULISTAO_SERVICOS_INIT);
   const [notas, setNotasRaw]                       = useState([]);
@@ -268,8 +268,8 @@ export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode 
 
   const RESUMO_CATS = [...varCalc, ...fixosCalc, ...outrosMensaisCalc];
 
-  const [setor, setSetor]               = useState("orcamento");
-  const [tab, setTab]                   = useState("dashboard");
+  const [setor, setSetor]               = useState(() => role === 'visualizador' ? "notas" : "orcamento");
+  const [tab, setTab]                   = useState(() => role === 'visualizador' ? "notas fiscais" : "dashboard");
   const [showNovo, setNovo]             = useState(false);
   const [jogoEdit, setJogoEdit]         = useState(null);
   const [filtroFase, setFiltroFase]     = useState("Todas");
@@ -378,12 +378,16 @@ export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode 
     </div>
   );
 
-  const SETORES = [
+  const SETORES_ALL = [
     { k:"orcamento",    l:"Orçamento",            icon:LayoutDashboard },
     { k:"notas",        l:"Notas Fiscais",        icon:FileText },
     { k:"logistica",    l:"Logística",            icon:Truck },
     { k:"fornecedores", l:"Hub de Fornecedores →", icon:Users },
     { k:"relatorio",    l:"Relatório",            icon:ClipboardList },
+  ];
+  const SETORES = role === 'admin' ? SETORES_ALL : [
+    { k:"notas",     l:"Notas Fiscais", icon:FileText },
+    { k:"relatorio", l:"Relatório",     icon:ClipboardList },
   ];
   const setorAtual = SETORES.find(s => s.k === setor);
 
@@ -417,6 +421,7 @@ export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode 
             onClick={()=>setOcultar(o=>!o)} active={ocultar} size={40} T={T}/>
           <IconButton icon={darkMode ? Sun : Moon} title={darkMode?"Modo claro":"Modo escuro"}
             onClick={()=>setDarkMode(d=>!d)} size={40} T={T}/>
+          <IconButton icon={LogOut} title="Sair" onClick={onSignOut} size={40} T={T}/>
         </div>
       </aside>
 
@@ -588,7 +593,7 @@ export default function Paulistao({ onBack, onOpenHub, T, darkMode, setDarkMode 
 
         </div>
 
-        {showNovo && <NovoJogoPaulistaoModal onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
+        {role === 'admin' && showNovo && <NovoJogoPaulistaoModal onSave={addJogo} onClose={()=>setNovo(false)} T={T}/>}
         {jogoEdit && <NovoJogoPaulistaoModal jogo={jogoEdit} onSave={handleEditSave} onClose={()=>setJogoEdit(null)} T={T}/>}
       </div>
     </div>

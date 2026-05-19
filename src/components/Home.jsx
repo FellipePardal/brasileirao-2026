@@ -8,7 +8,7 @@ import { Card, Stat, Button, Badge } from "./ui";
 import {
   Trophy, Calendar, Building2, Sun, Moon,
   ArrowRight, Lock, Activity, Handshake, Globe2,
-  Plus, Trash2,
+  Plus, Trash2, LogOut,
 } from "lucide-react";
 
 
@@ -219,7 +219,7 @@ function ChampCard({ camp, onEnter, onDelete, T }) {
   );
 }
 
-export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, customCampeonatos = [], onCriarCampeonato, onExcluirCampeonato }) {
+export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, customCampeonatos = [], onCriarCampeonato, onExcluirCampeonato, role = 'admin', onSignOut }) {
   const totalAtivos = CAMPEONATOS.filter(c => !c.emBreve).length + customCampeonatos.filter(c => c.status === "Em andamento").length;
 
   return (
@@ -270,6 +270,15 @@ export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, cus
             onClick={() => setDarkMode(d => !d)}
           >
             {darkMode ? "Claro" : "Escuro"}
+          </Button>
+          <Button
+            T={T}
+            variant="secondary"
+            size="sm"
+            icon={LogOut}
+            onClick={onSignOut}
+          >
+            Sair
           </Button>
         </div>
       </header>
@@ -333,9 +342,11 @@ export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, cus
               {CAMPEONATOS.length + customCampeonatos.length} projetos cadastrados
             </p>
           </div>
-          <Button T={T} variant="primary" size="md" icon={Plus} onClick={onCriarCampeonato}>
-            Novo campeonato
-          </Button>
+          {role === 'admin' && (
+            <Button T={T} variant="primary" size="md" icon={Plus} onClick={onCriarCampeonato}>
+              Novo campeonato
+            </Button>
+          )}
         </div>
 
         {/* Cards de campeonatos */}
@@ -367,8 +378,8 @@ export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, cus
             />
           ))}
 
-          {/* Card "+ Criar novo" — borda dashed transparente */}
-          <button onClick={onCriarCampeonato} className="lm-card-hover" style={{
+          {/* Card "+ Criar novo" — borda dashed transparente (admin only) */}
+          {role === 'admin' && <button onClick={onCriarCampeonato} className="lm-card-hover" style={{
             cursor: "pointer",
             border: `1.5px dashed ${T.borderStrong || T.border}`,
             background: "transparent",
@@ -399,7 +410,7 @@ export default function Home({ onEnter, onOpenHub, T, darkMode, setDarkMode, cus
               <p style={{margin: "0 0 4px", fontSize: 13, fontWeight: 500, color: T.text}}>Criar novo campeonato</p>
               <p style={{margin: 0, fontSize: 11, color: T.textSm, maxWidth: 240}}>Cole um JSON no formato padrão e o campeonato é criado com todas as funcionalidades do HUB.</p>
             </div>
-          </button>
+          </button>}
         </div>
 
         {/* ── Módulos Transversais ────────────────────────────────── */}
