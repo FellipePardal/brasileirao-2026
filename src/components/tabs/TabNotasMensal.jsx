@@ -1,10 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { KPI, Pill } from "../shared";
 import { fmt } from "../../utils";
 import { btnStyle, iSty, RADIUS } from "../../constants";
 import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile, getState, setState as setSupabaseState } from "../../lib/supabase";
 import { Card, PanelTitle, Button, Chip, Progress, tableStyles } from "../ui";
-import { Plus, Eye, Trash2, Upload, X, Download, FileText, Edit2, Check, AlertTriangle } from "lucide-react";
+import { Plus, Eye, Trash2, Upload, X, Download, FileText, Edit2, Check } from "lucide-react";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const VAR_CATEGORIAS = ["Transporte","Uber","Hospedagem","Seg. Espacial"];
@@ -320,59 +320,11 @@ export default function TabNotasMensal({ notas, setNotas, fornecedores = [], ser
   const fixosNomes = Array.from(new Set(notas.filter(n => n.servicoId).map(n => n.categoria)));
   const filtroCategorias = ["Todas", ...VAR_CATEGORIAS, ...fixosNomes, "Outro"];
 
-  // Serviços fixos ativos esperados no mês selecionado que ainda não têm NF lançada
-  const servicosSemNF = useMemo(() => servicos.flatMap(sec =>
-    sec.itens
-      .filter(it => {
-        if (it.status === "encerrado") return false;
-        if (it.tipo === "pontual" || it.tipo === "misto") return it.meses?.[mesSel] === true;
-        return true; // linear: presente em todos os meses
-      })
-      .filter(it => !notas.some(n => n.servicoId === it.id && n.mes === mesSel))
-      .map(it => ({ id: it.id, nome: it.nome, secao: sec.secao }))
-  ), [servicos, notas, mesSel]);
-
   const TS = tableStyles(T);
   const cyan = "#06b6d4";
 
   return (
     <>
-      {servicosSemNF.length > 0 && (
-        <div style={{
-          background:"rgba(217,119,6,0.08)",
-          border:"1px solid #d97706",
-          borderRadius:RADIUS.lg,
-          padding:"14px 18px",
-          marginBottom:20,
-          display:"flex",
-          alignItems:"flex-start",
-          gap:12,
-        }}>
-          <AlertTriangle size={18} color="#f59e0b" style={{flexShrink:0,marginTop:1}}/>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#f59e0b",marginBottom:8}}>
-              {servicosSemNF.length} serviço{servicosSemNF.length > 1 ? "s" : ""} sem NF em {MESES[mesSel]}
-            </div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {servicosSemNF.map(s => (
-                <span key={s.id} style={{
-                  background:"rgba(217,119,6,0.12)",
-                  border:"1px solid rgba(217,119,6,0.4)",
-                  borderRadius:6,
-                  padding:"3px 10px",
-                  fontSize:11,
-                  fontWeight:600,
-                  color:"#fbbf24",
-                }}>
-                  {s.nome}
-                  <span style={{color:"#d97706",marginLeft:5,fontWeight:400}}>· {s.secao}</span>
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:16,marginBottom:24}}>
         <KPI label={`Total ${MESES[mesSel]}`} value={fmt(totalValor)} sub={`${filtered.length} notas`} color={cyan} T={T}/>
         <KPI label="Total Geral" value={fmt(totalGeral)} sub={`${notas.length} notas (todos os meses)`} color="#a855f7" T={T}/>
