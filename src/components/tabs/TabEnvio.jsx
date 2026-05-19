@@ -61,7 +61,31 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const mensaisDisponiveis = notasMensais.filter(n => !nfsEnviadas.has(n.id));
   const livemodeDisponiveis = notasLivemode.filter(n => !nfsEnviadas.has(n.id));
 
-  const toggleJogoNF = id => setSelJogosNFs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Agrupa NFs com mesmo fornecedor+numeroNF numa única linha (evita duplicatas
+  // quando uma NF cobre múltiplos jogos e foi salva como entradas separadas)
+  const groupNFsList = (list) => {
+    const groups = new Map();
+    list.forEach(n => {
+      const key = n.numeroNF ? `${n.fornecedor}||${n.numeroNF}` : String(n.id);
+      if (!groups.has(key)) {
+        groups.set(key, { ...n, _groupIds: [n.id], _jogoLabels: [n.jogoLabel].filter(Boolean), valorNF: n.valorNF || 0 });
+      } else {
+        const g = groups.get(key);
+        g._groupIds.push(n.id);
+        if (n.jogoLabel) g._jogoLabels.push(n.jogoLabel);
+        g.valorNF = (g.valorNF || 0) + (n.valorNF || 0);
+      }
+    });
+    return [...groups.values()].map(g => ({ ...g, jogoLabel: g._jogoLabels.join(" + "), _isGroup: g._groupIds.length > 1 }));
+  };
+  const nfsGrupadas = groupNFsList(nfsDisponiveis);
+
+  const toggleJogoNF = groupIds => setSelJogosNFs(prev => {
+    const n = new Set(prev);
+    const allSel = groupIds.every(id => n.has(id));
+    if (allSel) groupIds.forEach(id => n.delete(id)); else groupIds.forEach(id => n.add(id));
+    return n;
+  });
   const toggleMensalNF = id => setSelMensaisNFs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selectAllJogos = () => setSelJogosNFs(new Set(nfsDisponiveis.map(n => n.id)));
   const selectAllMensais = () => setSelMensaisNFs(new Set(mensaisDisponiveis.map(n => n.id)));
@@ -178,7 +202,12 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   };
 
   // ── Adicionar notas a envio existente ──
-  const toggleAddJogo = id => setAddSelJogos(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleAddJogo = groupIds => setAddSelJogos(prev => {
+    const n = new Set(prev);
+    const allSel = groupIds.every(id => n.has(id));
+    if (allSel) groupIds.forEach(id => n.delete(id)); else groupIds.forEach(id => n.add(id));
+    return n;
+  });
   const toggleAddMensal = id => setAddSelMensais(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleAddLivemode = id => setAddSelLivemode(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -316,21 +345,23 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
           <PanelTitle T={T} title={`NFs de Jogos (${nfsDisponiveis.length} disponíveis)`} subtitle={`${selJogosNFs.size} selecionada${selJogosNFs.size!==1?"s":""}`} color={T.brand}
             right={<Button T={T} variant="secondary" size="sm" onClick={selectAllJogos}>Selecionar todas</Button>}
           />
-          {nfsDisponiveis.length === 0 ? (
+          {nfsGrupadas.length === 0 ? (
             <p style={{color:T.textSm,fontSize:12,padding:16,margin:0}}>Todas as NFs de jogos já foram enviadas</p>
           ) : (
             <div style={{maxHeight:320,overflowY:"auto"}}>
-              {nfsDisponiveis.map(n => {
-                const sel = selJogosNFs.has(n.id);
+              {nfsGrupadas.map(g => {
+                const sel = g._groupIds.every(id => selJogosNFs.has(id));
                 return (
-                  <div key={n.id} onClick={()=>toggleJogoNF(n.id)}
+                  <div key={g.id} onClick={()=>toggleJogoNF(g._groupIds)}
                     style={{display:"flex",alignItems:"center",gap:12,padding:"10px 22px",cursor:"pointer",borderTop:`1px solid ${T.border}`,background:sel?T.brand+"15":"transparent",transition:"background .15s"}}>
                     <input type="checkbox" checked={sel} readOnly style={{accentColor:T.brand}}/>
-                    <span style={{flex:1,fontSize:13,color:T.text,fontWeight:600}}>{n.fornecedor}</span>
-                    <span style={{fontSize:11,color:T.textSm}}>NF {n.numeroNF||"—"}</span>
-                    <span style={{fontSize:11,color:T.textSm}}>{n.jogoLabel}</span>
-                    <Pill label={`Rd ${n.rodada}`} color={T.warning}/>
-                    <span className="num" style={{fontSize:13,color:purple,fontWeight:700,minWidth:90,textAlign:"right"}}>{fmt(n.valorNF)}</span>
+                    <span style={{flex:1,fontSize:13,color:T.text,fontWeight:600}}>{g.fornecedor}</span>
+                    <span style={{fontSize:11,color:T.textSm}}>NF {g.numeroNF||"—"}</span>
+                    <span style={{fontSize:11,color:T.textSm}}>{g.jogoLabel}</span>
+                    {g._isGroup
+                      ? <Pill label={`${g._groupIds.length} jogos · Rd ${g.rodada}`} color={T.warning}/>
+                      : <Pill label={`Rd ${g.rodada}`} color={T.warning}/>}
+                    <span className="num" style={{fontSize:13,color:purple,fontWeight:700,minWidth:90,textAlign:"right"}}>{fmt(g.valorNF)}</span>
                   </div>
                 );
               })}
@@ -448,21 +479,23 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
             {nfsDisponiveis.length + mensaisDisponiveis.length + livemodeDisponiveis.length === 0 ? (
               <p style={{color:T.textSm,fontSize:12,padding:16,margin:0}}>Todas as NFs já foram enviadas</p>
             ) : (<>
-              {nfsDisponiveis.length > 0 && (
+              {nfsGrupadas.length > 0 && (
                 <div style={{borderTop:`1px solid ${T.border}`}}>
                   <p style={{color:T.textSm,fontSize:10,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"10px 22px 4px",margin:0}}>NFs de Jogos</p>
                   <div style={{maxHeight:200,overflowY:"auto"}}>
-                    {nfsDisponiveis.map(n => {
-                      const sel = addSelJogos.has(n.id);
+                    {nfsGrupadas.map(g => {
+                      const sel = g._groupIds.every(id => addSelJogos.has(id));
                       return (
-                        <div key={n.id} onClick={()=>toggleAddJogo(n.id)}
+                        <div key={g.id} onClick={()=>toggleAddJogo(g._groupIds)}
                           style={{display:"flex",alignItems:"center",gap:12,padding:"8px 22px",cursor:"pointer",background:sel?T.brand+"15":"transparent",transition:"background .15s"}}>
                           <input type="checkbox" checked={sel} readOnly style={{accentColor:T.brand}}/>
-                          <span style={{flex:1,fontSize:12,color:T.text,fontWeight:600}}>{n.fornecedor}</span>
-                          <span style={{fontSize:10,color:T.textSm}}>NF {n.numeroNF||"—"}</span>
-                          <span style={{fontSize:10,color:T.textSm}}>{n.jogoLabel}</span>
-                          <Pill label={`Rd ${n.rodada}`} color={T.warning}/>
-                          <span className="num" style={{fontSize:12,color:purple,fontWeight:700}}>{fmt(n.valorNF)}</span>
+                          <span style={{flex:1,fontSize:12,color:T.text,fontWeight:600}}>{g.fornecedor}</span>
+                          <span style={{fontSize:10,color:T.textSm}}>NF {g.numeroNF||"—"}</span>
+                          <span style={{fontSize:10,color:T.textSm}}>{g.jogoLabel}</span>
+                          {g._isGroup
+                            ? <Pill label={`${g._groupIds.length} jogos · Rd ${g.rodada}`} color={T.warning}/>
+                            : <Pill label={`Rd ${g.rodada}`} color={T.warning}/>}
+                          <span className="num" style={{fontSize:12,color:purple,fontWeight:700}}>{fmt(g.valorNF)}</span>
                         </div>
                       );
                     })}
