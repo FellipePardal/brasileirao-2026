@@ -892,40 +892,49 @@ export default function App() {
   const T = darkMode ? DARK : LIGHT;
 
   useEffect(() => {
+    let mounted = true;
+
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        // Check Google OAuth domain restriction
-        if (session.user.app_metadata?.provider === 'google' &&
-            !session.user.email?.endsWith('@livemode.com')) {
-          await supabase.auth.signOut();
-          setAuthError('Acesso restrito a contas @livemode.com');
-          setAuthLoading(false);
-          return;
+      if (!mounted) return;
+      try {
+        if (session?.user) {
+          if (session.user.app_metadata?.provider === 'google' &&
+              !session.user.email?.endsWith('@livemode.com')) {
+            await supabase.auth.signOut();
+            if (mounted) setAuthError('Acesso restrito a contas @livemode.com');
+            return;
+          }
+          if (mounted) setUser(session.user);
+          const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+          if (mounted) setRole(data?.role ?? null);
         }
-        setUser(session.user);
-        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        setRole(data?.role ?? null);
+      } finally {
+        if (mounted) setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        // Check Google OAuth domain restriction
-        if (session.user.app_metadata?.provider === 'google' &&
-            !session.user.email?.endsWith('@livemode.com')) {
-          await supabase.auth.signOut();
-          setAuthError('Acesso restrito a contas @livemode.com');
-          return;
+      if (!mounted) return;
+      try {
+        if (session?.user) {
+          if (session.user.app_metadata?.provider === 'google' &&
+              !session.user.email?.endsWith('@livemode.com')) {
+            await supabase.auth.signOut();
+            if (mounted) setAuthError('Acesso restrito a contas @livemode.com');
+            return;
+          }
+          if (mounted) setUser(session.user);
+          const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+          if (mounted) setRole(data?.role ?? null);
+        } else {
+          if (mounted) { setUser(null); setRole(null); }
         }
-        setUser(session.user);
-        const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        setRole(data?.role ?? null);
-      } else {
-        setUser(null);
-        setRole(null);
+      } finally {
+        if (mounted) setAuthLoading(false);
       }
     });
-    return () => subscription.unsubscribe();
+
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const signOut = async () => { await supabase.auth.signOut(); };
