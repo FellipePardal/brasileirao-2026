@@ -894,43 +894,25 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!mounted) return;
-      try {
-        if (session?.user) {
-          if (session.user.app_metadata?.provider === 'google' &&
-              !session.user.email?.endsWith('@livemode.com')) {
-            await supabase.auth.signOut();
-            if (mounted) setAuthError('Acesso restrito a contas @livemode.com');
-            return;
-          }
-          if (mounted) setUser(session.user);
-          const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-          if (mounted) setRole(data?.role ?? null);
-        }
-      } finally {
-        if (mounted) setAuthLoading(false);
-      }
-    });
+    const loadRole = (userId) => {
+      supabase.from('profiles').select('role').eq('id', userId).single()
+        .then(({ data }) => { if (mounted) setRole(data?.role ?? 'visualizador'); })
+        .catch(() => { if (mounted) setRole('visualizador'); });
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      try {
-        if (session?.user) {
-          if (session.user.app_metadata?.provider === 'google' &&
-              !session.user.email?.endsWith('@livemode.com')) {
-            await supabase.auth.signOut();
-            if (mounted) setAuthError('Acesso restrito a contas @livemode.com');
-            return;
-          }
-          if (mounted) setUser(session.user);
-          const { data } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-          if (mounted) setRole(data?.role ?? null);
-        } else {
-          if (mounted) { setUser(null); setRole(null); }
+      if (session?.user) {
+        if (session.user.app_metadata?.provider === 'google' &&
+            !session.user.email?.endsWith('@livemode.com')) {
+          supabase.auth.signOut();
+          if (mounted) { setAuthError('Acesso restrito a contas @livemode.com'); setAuthLoading(false); }
+          return;
         }
-      } finally {
-        if (mounted) setAuthLoading(false);
+        if (mounted) { setUser(session.user); setAuthLoading(false); }
+        loadRole(session.user.id);
+      } else {
+        if (mounted) { setUser(null); setRole(null); setAuthLoading(false); }
       }
     });
 
