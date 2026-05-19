@@ -4,7 +4,7 @@ import { fmt } from "../../utils";
 import { btnStyle, iSty, RADIUS } from "../../constants";
 import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile, getState, setState as setSupabaseState } from "../../lib/supabase";
 import { Card, PanelTitle, Button, Chip, Progress, tableStyles } from "../ui";
-import { Plus, Eye, Trash2, Upload, X, Download, FileText } from "lucide-react";
+import { Plus, Eye, Trash2, Upload, X, Download, FileText, Edit2, Check } from "lucide-react";
 
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const VAR_CATEGORIAS = ["Transporte","Uber","Hospedagem","Seg. Espacial"];
@@ -245,6 +245,8 @@ export default function TabNotasMensal({ notas, setNotas, fornecedores = [], ser
   const [preview, setPreview] = useState(null);
   const uploadRef = useRef(null);
   const [uploadTarget, setUploadTarget] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [editingNF, setEditingNF] = useState("");
 
   const mesesComNotas = Array.from(new Set(notas.map(n => n.mes))).sort((a, b) => a - b);
   const mesesExibir = Array.from(new Set([...mesesComNotas, mesSel])).sort((a, b) => a - b);
@@ -277,6 +279,14 @@ export default function TabNotasMensal({ notas, setNotas, fornecedores = [], ser
       setNotas(ns => ns.filter(n => n.id !== id));
       if (nota) pushHistoricoMensal({ ...nota, decisao: "excluida", excluidoEm: new Date().toISOString() });
     }
+  };
+
+  const startEdit = n => { setEditingId(n.id); setEditingNF(n.numeroNF || ""); };
+  const cancelEdit = () => { setEditingId(null); setEditingNF(""); };
+  const saveEditNF = id => {
+    setNotas(ns => ns.map(n => n.id === id ? { ...n, numeroNF: editingNF.trim() } : n));
+    setEditingId(null);
+    setEditingNF("");
   };
 
   const handleUploadLater = async (file, nota) => {
@@ -411,7 +421,23 @@ export default function TabNotasMensal({ notas, setNotas, fornecedores = [], ser
                 <tr key={n.id} style={TS.tr}>
                   <td style={{...TS.td, fontWeight:600, whiteSpace:"nowrap"}}>{n.fornecedor}</td>
                   <td style={TS.td}><Pill label={n.categoria} color={cyan}/></td>
-                  <td className="num" style={{...TS.td, color:T.textMd, fontSize:12}}>{n.numeroNF || "—"}</td>
+                  <td className="num" style={{...TS.td, fontSize:12, minWidth:120}}>
+                    {editingId === n.id ? (
+                      <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                        <input
+                          autoFocus
+                          value={editingNF}
+                          onChange={e => setEditingNF(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") saveEditNF(n.id); if (e.key === "Escape") cancelEdit(); }}
+                          style={{...iSty(T), width:90, padding:"3px 7px", fontSize:12}}
+                        />
+                        <Button T={T} variant="primary" size="sm" icon={Check} onClick={() => saveEditNF(n.id)}/>
+                        <Button T={T} variant="secondary" size="sm" icon={X} onClick={cancelEdit}/>
+                      </div>
+                    ) : (
+                      <span style={{color:T.textMd}}>{n.numeroNF || "—"}</span>
+                    )}
+                  </td>
                   <td className="num" style={{...TS.tdNum, color:cyan, fontWeight:700}}>{fmt(n.valor)}</td>
                   <td className="num" style={{...TS.td, color:T.textMd, fontSize:12}}>{n.dataEmissao || "—"}</td>
                   <td className="num" style={{...TS.td, color:T.textMd, fontSize:12}}>{n.dataEnvio || "—"}</td>
@@ -421,7 +447,8 @@ export default function TabNotasMensal({ notas, setNotas, fornecedores = [], ser
                       {n.hasFile
                         ? <Button T={T} variant="secondary" size="sm" icon={Eye}    onClick={()=>setPreview(n)}/>
                         : <Button T={T} variant="secondary" size="sm" icon={Upload} onClick={()=>{setUploadTarget(n); uploadRef.current?.click();}}/>}
-                      <Button T={T} variant="danger" size="sm" icon={Trash2} onClick={()=>deleteNota(n.id)}/>
+                      <Button T={T} variant="secondary" size="sm" icon={Edit2} onClick={()=>startEdit(n)}/>
+                      <Button T={T} variant="danger"    size="sm" icon={Trash2} onClick={()=>deleteNota(n.id)}/>
                     </div>
                   </td>
                 </tr>
