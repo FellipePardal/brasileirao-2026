@@ -5,7 +5,7 @@ import { CATS, btnStyle, iSty, RADIUS } from "../../constants";
 import { fileToDataUrl, saveNFFile, getNFFile, deleteNFFile, getState, setState as setSupabaseState } from "../../lib/supabase";
 import { usePortalLink } from "../../hooks/usePortalLink";
 import { getOperacionaisPorSubKey, findFornecedorTolerante, emiteNF } from "../../lib/portalLink";
-import { countNotasFiscais, getNotaFiscalScales, groupNotasFiscais, normalizeEnvioMetricas, sumNotasFiscais } from "../../lib/notasFiscais";
+import { countNotasFiscais, getNotaFiscalScales, groupNotasFiscais, normalizeEnvioMetricas, notaFiscalKey, sumNotasFiscais } from "../../lib/notasFiscais";
 import { Card, PanelTitle, Button, Chip, Segmented, Progress, tableStyles } from "../ui";
 import { Plus, Eye, Trash2, Upload, Copy as CopyIcon, FileText } from "lucide-react";
 
@@ -1298,27 +1298,36 @@ export default function TabNotas({ notas, setNotas, jogos, setJogos, fornecedore
   };
 
   const deleteNota = id => {
-    const envioComNota = envios.find(e => (e.notasIds || []).includes(id));
-    const msg = envioComNota
-      ? `Excluir esta NF? Ela está no Envio ${envioComNota.numero} e também será removida de lá.`
-      : "Excluir esta NF?";
+    const nota = notas.find(n => n.id === id);
+
+    // Quando dedupeNotasPorNF ativo, apaga todas as cópias com mesma chave
+    // (evita o problema de "apagar e ela continuar" por causa de duplicatas)
+    const idsParaApagar = dedupeNotasPorNF && nota
+      ? notas.filter(n => notaFiscalKey(n) === notaFiscalKey(nota)).map(n => n.id)
+      : [id];
+    const idsSet = new Set(idsParaApagar);
+
+    const enviosAfetados = envios.filter(e => (e.notasIds || []).some(nid => idsSet.has(nid)));
+    const temEnvio = enviosAfetados.length > 0;
+    const qtd = idsParaApagar.length;
+    const sufixo = qtd > 1 ? ` (${qtd} cópias duplicadas)` : "";
+    const msg = temEnvio
+      ? `Excluir esta NF${sufixo}? Ela está no Envio ${enviosAfetados[0].numero} e também será removida de lá.`
+      : `Excluir esta NF${sufixo}?`;
+
     if (window.confirm(msg)) {
-      const nota = notas.find(n => n.id === id);
-      deleteNFFile(id);
-      setNotas(ns => ns.filter(n => n.id !== id));
-      if (setEnvios && envioComNota) {
+      idsParaApagar.forEach(nid => deleteNFFile(nid));
+      setNotas(ns => ns.filter(n => !idsSet.has(n.id)));
+      if (setEnvios && temEnvio) {
         setEnvios(evs => evs.map(e => {
-          if (!(e.notasIds || []).includes(id)) return e;
-          const notasIds = (e.notasIds || []).filter(nid => nid !== id);
-          const notasResumo = (e.notasResumo || []).filter(n => n.id !== id);
-          return normalizeEnvioMetricas({
-            ...e,
-            notasIds,
-            notasResumo,
-          }, { dedupeNotasPorNF });
+          if (!(e.notasIds || []).some(nid => idsSet.has(nid))) return e;
+          const notasIds = (e.notasIds || []).filter(nid => !idsSet.has(nid));
+          const notasResumo = (e.notasResumo || []).filter(n => !idsSet.has(n.id));
+          return normalizeEnvioMetricas({ ...e, notasIds, notasResumo }, { dedupeNotasPorNF });
         }));
       }
-      if (nota) pushHistorico({ ...nota, decisao: "excluida", excluidoEm: new Date().toISOString() }, historicoKey);
+      const agora = new Date().toISOString();
+      notas.filter(n => idsSet.has(n.id)).forEach(n => pushHistorico({ ...n, decisao: "excluida", excluidoEm: agora }, historicoKey));
     }
   };
 
