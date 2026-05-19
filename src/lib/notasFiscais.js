@@ -10,12 +10,16 @@ const num = value => Number(value) || 0;
 
 export function notaFiscalKey(nota) {
   const numero = norm(nota?.numeroNF);
-  if (!numero) return `id:${nota?.id ?? Math.random()}`;
-  return [
-    norm(nota?.fornecedor),
-    numero,
-    norm(nota?.dataEmissao),
-  ].join("|");
+  if (numero) {
+    return [norm(nota?.fornecedor), numero, norm(nota?.dataEmissao)].join("|");
+  }
+  // Sem número de NF: agrupa por fornecedor+rodada+jogo para detectar duplicatas reais
+  const rodada = String(nota?.rodada || "");
+  const jogoId = String(nota?.jogoId || "");
+  if (rodada && jogoId) {
+    return `${norm(nota?.fornecedor)}|rd:${rodada}|jogo:${jogoId}`;
+  }
+  return `id:${nota?.id ?? Math.random()}`;
 }
 
 export function groupNotasFiscais(notas = [], { dedupe = false } = {}) {

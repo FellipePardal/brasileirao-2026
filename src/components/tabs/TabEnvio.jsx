@@ -61,22 +61,40 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const mensaisDisponiveis = notasMensais.filter(n => !nfsEnviadas.has(n.id));
   const livemodeDisponiveis = notasLivemode.filter(n => !nfsEnviadas.has(n.id));
 
-  // Agrupa NFs com mesmo fornecedor+numeroNF numa única linha (evita duplicatas
-  // quando uma NF cobre múltiplos jogos e foi salva como entradas separadas)
+  // Agrupa NFs que representam a mesma nota fiscal (multi-jogo ou duplicata real)
+  // Chave alinhada com notaFiscalKey de notasFiscais.js
   const groupNFsList = (list) => {
+    const nfKey = n => {
+      const num = (n.numeroNF || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+      if (num) return `${(n.fornecedor||"").trim().toLowerCase()}||${num}||${(n.dataEmissao||"").trim()}`;
+      const rodada = String(n.rodada || "");
+      const jogoId = String(n.jogoId || "");
+      if (rodada && jogoId) return `${(n.fornecedor||"").trim().toLowerCase()}|rd:${rodada}|jogo:${jogoId}`;
+      return `id:${n.id}`;
+    };
     const groups = new Map();
     list.forEach(n => {
-      const key = n.numeroNF ? `${n.fornecedor}||${n.numeroNF}` : String(n.id);
+      const key = nfKey(n);
       if (!groups.has(key)) {
-        groups.set(key, { ...n, _groupIds: [n.id], _jogoLabels: [n.jogoLabel].filter(Boolean), valorNF: n.valorNF || 0 });
+        groups.set(key, { ...n, _groupIds: [n.id], _jogoLabels: [n.jogoLabel].filter(Boolean), _valores: [n.valorNF || 0] });
       } else {
         const g = groups.get(key);
         g._groupIds.push(n.id);
         if (n.jogoLabel) g._jogoLabels.push(n.jogoLabel);
-        g.valorNF = (g.valorNF || 0) + (n.valorNF || 0);
+        g._valores.push(n.valorNF || 0);
       }
     });
-    return [...groups.values()].map(g => ({ ...g, jogoLabel: g._jogoLabels.join(" + "), _isGroup: g._groupIds.length > 1 }));
+    return [...groups.values()].map(g => {
+      const firstVal = g._valores[0] || 0;
+      const sameValue = g._valores.length > 1 && g._valores.every(v => Math.abs(v - firstVal) < 0.01);
+      return {
+        ...g,
+        jogoLabel: g._jogoLabels.join(" + "),
+        _isGroup: g._groupIds.length > 1,
+        _isTrueDuplicate: sameValue && g._groupIds.length > 1,
+        valorNF: sameValue ? firstVal : g._valores.reduce((s, v) => s + v, 0),
+      };
+    });
   };
   const nfsGrupadas = groupNFsList(nfsDisponiveis);
 
@@ -95,7 +113,11 @@ export default function TabEnvio({ jogos, notas, notasMensais, notasLivemode = [
   const selJogosArr = notas.filter(n => selJogosNFs.has(n.id));
   const selMensaisArr = notasMensais.filter(n => selMensaisNFs.has(n.id));
   const selLivemodeArr = notasLivemode.filter(n => selLivemodeNFs.has(n.id));
-  const totalSelValor = sumNotasFiscais(selJogosArr, "valorNF", { dedupe: dedupeNotasPorNF }) + selMensaisArr.reduce((s, n) => s + (n.valor||0), 0) + selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
+  // Total calculado a partir dos grupos visuais: evita contar duplicatas duas vezes
+  const totalSelJogos = nfsGrupadas
+    .filter(g => g._groupIds.some(id => selJogosNFs.has(id)))
+    .reduce((s, g) => s + g.valorNF, 0);
+  const totalSelValor = totalSelJogos + selMensaisArr.reduce((s, n) => s + (n.valor||0), 0) + selLivemodeArr.reduce((s, n) => s + (n.valor||0), 0);
   const proximoNumeroEnvio = nextEnvioNumero(envios);
   const envioPublicRef = envio => `${enviosKey}:${envio.publicToken || `id:${envio.id}`}`;
   const envioPublicHash = envio => `#envio/${encodeURIComponent(envioPublicRef(envio))}`;
