@@ -987,6 +987,9 @@ export default function App() {
   // Tela de login para o HUB
   if (!user) return <LoginGate T={T} authError={authError} setAuthError={setAuthError}/>;
 
+  // Aguarda role carregar (query de profiles é não-bloqueante)
+  if (role === null) return <LoadingScreen T={T}/>;
+
   // Fornecedor — só acessa formulário externo
   if (role === 'fornecedor') return <FornecedorPage T={T} onSignOut={signOut}/>;
 
